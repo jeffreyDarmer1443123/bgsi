@@ -6,11 +6,11 @@ local PlaceID = game.PlaceId
 local CurrentServerId = game.JobId
 
 local Config = {
-    MinPlayers = 2,          -- Mindestanzahl an Spielern im Zielserver
-    RequiredFreeSlots = 2,   -- Benötigte freie Plätze
-    BaseDelay = 3,           -- Basis-Wartezeit zwischen Versuchen
-    MaxRetries = 5,          -- Maximale Versuche
-    RateLimitThreshold = 3   -- Maximale Rate-Limit Fehler
+  MinPlayers = 1,
+  RequiredFreeSlots = 2,
+  BaseDelay = 5,
+  MaxRetries = 7,
+  RateLimitThreshold = 5
 }
 
 local AttemptCount = 0
