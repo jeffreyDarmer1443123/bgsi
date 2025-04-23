@@ -1,7 +1,7 @@
 -- Universal Server Hopper v4.2 (Stabil)
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
-local PlaceID = 85896571713843  -- Hardcodierte PlaceID
+local PlaceID = placeId or 85896571713843
 local CurrentJobId = game.JobId
 
 local Config = {
