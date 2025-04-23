@@ -1,106 +1,44 @@
--- EggCheck v3.0 (Robuste Version)
-local eggName = "void-egg"  -- Standardwert als Fallback
-local requiredLuck = 25     -- Default Luck-Wert
+-- EggCheck (ohne Konfiguration)
+local function findEgg()
+    local rifts = workspace:FindFirstChild("Rendered") and workspace.Rendered:FindFirstChild("Rifts")
+    if not rifts then return nil end
 
--- Sicherheitschecks für Konfiguration
-assert(type(eggName) == "string", "❌ Ungültiger Egg-Name")
-eggName = eggName:lower():gsub("%s+", "")  -- Normalisierung
-
-local function safeString(input)
-    return tostring(input or "N/A")
-end
-
-local function getEggStats(eggFolder)
-    local display = eggFolder:FindFirstChild("Display")
-    if not display then return nil, "Kein Display" end
-    
-    local surfaceGui = display:FindFirstChildWhichIsA("SurfaceGui", true)
-    if not surfaceGui then return nil, "Kein SurfaceGui" end
-
-    -- Luck-Wert auslesen
-    local luckValue = 0
-    local luckLabel = surfaceGui:FindFirstChild("Luck", true)
-    if luckLabel and luckLabel:IsA("TextLabel") then
-        luckValue = tonumber(luckLabel.Text:match("%d+")) or 0
-    end
-
-    -- Timer auslesen
-    local timeText
-    for _, obj in ipairs(surfaceGui:GetDescendants()) do
-        if obj:IsA("TextLabel") and obj.Name:lower() == "timer" then
-            timeText = safeString(obj.Text)
-            break
+    local candidates = {}
+    for _, egg in ipairs(rifts:GetChildren()) do
+        if egg.Name == eggName then
+            table.insert(candidates, egg)
         end
     end
-
-    return luckValue, timeText
+    return candidates
 end
 
--- Rift-Suche mit Fehlerabfang
-local rifts = workspace:FindFirstChild("Rendered") 
-    and workspace.Rendered:FindFirstChild("Rifts")
-
-if not rifts then
-    error("❌ Rifts-Ordner nicht gefunden")
+local function getLuck(egg)
+    local display = egg:FindFirstChild("Display")
+    if not display then return 0 end
+    
+    local luckLabel = display:FindFirstChild("Luck", true)
+    if luckLabel and luckLabel:IsA("TextLabel") then
+        return tonumber(luckLabel.Text:match("%d+")) or 0
+    end
+    return 0
 end
 
-local candidates = {}
-for _, egg in ipairs(rifts:GetChildren()) do
-    if egg.Name:lower() == eggName:lower() then
-        table.insert(candidates, egg)
+-- Hauptlogik
+local candidates = findEgg()
+if not candidates or #candidates == 0 then
+    error("❌ Kein "..eggName.." gefunden")
+end
+
+local bestEgg, bestLuck
+for _, egg in ipairs(candidates) do
+    local luck = getLuck(egg)
+    if luck > (bestLuck or 0) then
+        bestEgg, bestLuck = egg, luck
     end
 end
 
-if #candidates == 0 then
-    error("❌ Keine Eggs gefunden: "..eggName)
-end
-
--- Bestes Egg ermitteln
-local bestEgg, bestLuck, bestTime
-for index, egg in ipairs(candidates) do
-    local luck, time = getEggStats(egg)
-    if luck and (not bestLuck or luck > bestLuck) then
-        bestEgg, bestLuck, bestTime = egg, luck, time
-    end
-end
-
-if not bestLuck then
-    error("❌ Keine gültigen Luck-Werte")
-end
-
--- Instanz-Index ermitteln
-local instanceIndex = table.find(candidates, bestEgg) or "N/A"
-
--- Y-Position sicher auslesen
-local yInfo = ""
-local outputPart = bestEgg:FindFirstChild("Output")
-if outputPart and outputPart:IsA("BasePart") then
-    yInfo = " | Y="..safeString(outputPart.Position.Y)
-end
-
--- Nachricht generierung
-local ok = bestLuck >= requiredLuck
-local messageParts = {
-    ("✅ Erfolg!"),
-    ("Egg: %s"):format(eggName),
-    ("Instanz: #%s"):format(instanceIndex),
-    ("Luck: %d/%d"):format(bestLuck, requiredLuck),
-    bestTime and ("Zeit: %s"):format(bestTime) or nil,
-    yInfo ~= "" and yInfo or nil
-}
-
--- Filtere leere Teile
-local cleanParts = {}
-for _, part in ipairs(messageParts) do
-    if part then
-        table.insert(cleanParts, part)
-    end
-end
-
-local finalMessage = table.concat(cleanParts, " | ")
-
-if ok then
-    print(finalMessage)
+if bestLuck >= requiredLuck then
+    print("✅ Passendes Egg gefunden! Luck:", bestLuck)
 else
-    error("❌ "..finalMessage)
+    error("❌ Luck zu niedrig: "..bestLuck.."/"..requiredLuck)
 end
