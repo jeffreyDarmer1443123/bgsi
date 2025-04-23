@@ -1,34 +1,22 @@
--- ServerHopper (Teleport-Logik)
-local function fetchServers()
-    local response = game:HttpGetAsync(
-        "https://games.roblox.com/v1/games/"..placeId..
-        "/servers/Public?sortOrder=Asc&limit=100"
-    )
-    return game:GetService("HttpService"):JSONDecode(response).data
-end
+-- ServerHopper (Teleport)
+local servers = game:GetService("HttpService"):JSONDecode(
+    game:HttpGet("https://games.roblox.com/v1/games/"..placeId.."/servers/Public?limit=100")
+).data
 
-local function findValidServer(servers)
-    local currentJobId = game.JobId
-    for _, server in ipairs(servers) do
-        if server.id ~= currentJobId and server.playing < 10 then
-            return server.id
-        end
+local currentJobId = game.JobId
+local targetServer = nil
+
+for _, server in ipairs(servers) do
+    if server.id ~= currentJobId and server.playing < 10 then
+        targetServer = server.id
+        break
     end
 end
 
-local function hopServer()
-    for i = 1, 5 do  -- Max 5 Versuche
-        local servers = fetchServers()
-        local target = findValidServer(servers)
-        if target then
-            TeleportService:TeleportToPlaceInstance(placeId, target)
-            task.wait(5)  -- Wartezeit für Teleport
-            return
-        end
-        task.wait(2 * i)  -- Backoff-Zeit
-    end
-    TeleportService:Teleport(placeId)  -- Fallback
+if targetServer then
+    TeleportService:TeleportToPlaceInstance(placeId, targetServer)
+else
+    TeleportService:Teleport(placeId)
 end
 
-print("Starte ServerHop...")
-hopServer()
+print("⏩ ServerHop gestartet")
