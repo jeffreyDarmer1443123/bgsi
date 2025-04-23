@@ -1,74 +1,94 @@
--- Universal Server Hopper v4.1 (Fixed)
+-- Universal Server Hopper v4.2 (Stabil)
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
-local PlaceID = 85896571713843  -- Hardcoded PlaceID
-local CurrentServerId = game.JobId
+local PlaceID = 85896571713843  -- Hardcodierte PlaceID
+local CurrentJobId = game.JobId
 
 local Config = {
-    MinPlayers = 1,
-    RequiredFreeSlots = 1,
-    BaseDelay = 5,
     MaxRetries = 7,
-    RateLimitThreshold = 5
+    BaseDelay = 5,
+    RetryIncrement = 3,
+    RateLimitWait = 10,
+    MinPlayers = 1
 }
 
 local function debugLog(...)
-    print(os.date("[%H:%M:%S]").." [FixedHopper] "..table.concat({...}, " "))
+    print(os.date("[%H:%M:%S]").." [HopMaster] "..table.concat({...}, " "))
 end
 
-local function handleHttpRequest(url)
+local function safeHttpGet(url)
     local success, response = pcall(function()
         return game:HttpGetAsync(url, true)
     end)
     return success and response or nil
 end
 
-local function fetchServers()
-    local response = handleHttpRequest(
+local function fetchValidServers()
+    local response = safeHttpGet(
         "https://games.roblox.com/v1/games/"..PlaceID..
         "/servers/Public?sortOrder=Asc&limit=100"
     )
-    return response and HttpService:JSONDecode(response).data
+    
+    if not response then
+        debugLog("Serverliste nicht abrufbar")
+        return {}
+    end
+
+    local success, data = pcall(HttpService.JSONDecode, HttpService, response)
+    return success and data.data or {}
 end
 
 local function filterServers(servers)
     local valid = {}
-    for _, server in pairs(servers) do
-        if server.id ~= CurrentServerId then
+    for _, server in ipairs(servers) do
+        if server.id ~= CurrentJobId
+            and server.playing >= Config.MinPlayers
+            and server.maxPlayers > server.playing
+        then
             table.insert(valid, server.id)
         end
     end
     return valid
 end
 
-local function attemptTeleport()
-    CurrentServerId = game.JobId
-    local servers = fetchServers()
-    if not servers then return false end
-    
-    local validServers = filterServers(servers)
-    if #validServers == 0 then return false end
-
-    local target = validServers[math.random(#validServers)]
-    debugLog("Attempting TP to:", target)
-    
-    local result = TeleportService:TeleportToPlaceInstance(PlaceID, target)
-    if result == Enum.TeleportResult.Success then
-        debugLog("Teleport initiated")
-        task.wait(5)
-        return true
+local function attemptHop()
+    local servers = fetchValidServers()
+    if #servers == 0 then
+        debugLog("Keine passenden Server gefunden")
+        return false
     end
-    return false
+
+    local target = servers[math.random(#servers)]
+    debugLog("Versuche Server:", target:sub(1, 8).."...")
+
+    local success = pcall(function()
+        TeleportService:TeleportToPlaceInstance(PlaceID, target)
+    end)
+
+    if not success then
+        debugLog("Fehler bei Teleportversuch")
+    end
+    return success
 end
 
-local function main()
-    debugLog("Starting improved hopper")
-    for i = 1, Config.MaxRetries do
-        if attemptTeleport() then return end
-        debugLog("Retrying in "..Config.BaseDelay.."s ("..i.."/"..Config.MaxRetries..")")
-        task.wait(Config.BaseDelay)
+local function mainHop()
+    for attempt = 1, Config.MaxRetries do
+        debugLog("Versuch "..attempt.."/"..Config.MaxRetries)
+        
+        if attemptHop() then
+            debugLog("Teleport initiiert")
+            task.wait(5)  -- Wartezeit für Teleport
+            return
+        end
+        
+        local delay = Config.BaseDelay + (attempt * Config.RetryIncrement)
+        debugLog("Neuer Versuch in "..delay.."s")
+        task.wait(delay)
     end
+
+    debugLog("Fallback zu Standard-Teleport")
     TeleportService:Teleport(PlaceID)
 end
 
-main()
+debugLog("Starte ServerHopper...")
+mainHop()
