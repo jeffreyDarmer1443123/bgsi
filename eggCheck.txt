@@ -85,7 +85,6 @@ end
 
 if #candidates == 0 then
     print(("❌ Kein Egg namens '%s' gefunden."):format(eggName))
-    false
     return
 end
 
@@ -102,7 +101,6 @@ end
 
 if not bestEgg then
     print(("❌ Luck-Wert für '%s' konnte nicht ermittelt werden."):format(eggName))
-    false
     return
 end
 
