@@ -1,4 +1,4 @@
--- Universal Server Hopper v4
+-- Universal Server Hopper v4.1
 -- Kompatibel mit Synapse, KRNL, Fluxus, AWP und anderen Executoren
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
@@ -76,9 +76,11 @@ end
 local function filterServers(servers)
     local valid = {}
     for _, server in pairs(servers) do
+        -- Füge Überprüfung auf private Server hinzu
         if server.id ~= CurrentServerId
             and server.playing >= Config.MinPlayers
             and (server.maxPlayers - server.playing) >= Config.RequiredFreeSlots
+            and not server.vip  -- Filtere private Server heraus
         then
             table.insert(valid, server.id)
         end
