@@ -1,8 +1,8 @@
 -- Script: EggLuckAndTimeCheck
 -- Platziere dieses Script z.B. in ServerScriptService.
 -- ► Nur hier anpassen:
-local eggName = "void-egg"
-local requiredLuck = 25
+local eggName      = "void-egg"  -- Name des Eggs, z.B. "nightmare-egg"
+local requiredLuck = 25           -- Mindest-Luck (Multiplikator)
 local possibleEggs= {
     "aura-Egg",
     "bunny-Egg",
@@ -112,7 +112,6 @@ if outputPart and outputPart:IsA("BasePart") then
     yInfo = (" | Y=%.2f"):format(outputPart.Position.Y)
 end
 
--- ► 4) Ergebnis ausgeben
 -- ► 4) Ergebnis ausgeben
 local ok       = bestLuck >= requiredLuck
 local icon     = ok and "✅" or "❌"
