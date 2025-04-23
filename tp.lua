@@ -1,97 +1,131 @@
--- ServerHopper v5.0 (Stabil)
+-- Universal Server Hopper v4
+-- Kompatibel mit Synapse, KRNL, Fluxus, AWP und anderen Executoren
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
-local PlaceID = 85896571713843  -- Hardcodierte PlaceID
+local PlaceID = game.PlaceId
+local CurrentServerId = game.JobId
 
 local Config = {
-    MaxAttempts = 10,
-    BaseDelay = 5,
-    RetryExponent = 1.5,
-    RateLimitCooldown = 15,
-    MinPlayers = 1
+    MinPlayers = 2,          -- Mindestanzahl an Spielern im Zielserver
+    RequiredFreeSlots = 2,   -- Benötigte freie Plätze
+    BaseDelay = 3,           -- Basis-Wartezeit zwischen Versuchen
+    MaxRetries = 5,          -- Maximale Versuche
+    RateLimitThreshold = 3   -- Maximale Rate-Limit Fehler
 }
 
+local AttemptCount = 0
+local RateLimitCount = 0
+
 local function debugLog(...)
-    local args = table.concat({...}, " ")
-    print(os.date("[%H:%M:%S]").." [HopMaster] "..args)
+    local args = {...}
+    local message = table.concat(args, " ")
+    print(os.date("[%H:%M:%S]") .. " [ServerHopper] " .. message)
 end
 
-local function safeHttpGet(url)
-    for i = 1, 3 do  -- 3 Wiederholungsversuche
+local function handleHttpRequest(url)
+    -- Universal HTTP-Handler für alle Executoren
+    local executor = identifyexecutor and identifyexecutor():lower() or "unknown"
+    
+    -- AWP-Spezifische Behandlung
+    if executor:find("awp") then
         local success, response = pcall(function()
-            return game:HttpGetAsync(url, true)
+            return game:HttpGet(url)
         end)
         if success then return response end
-        task.wait(2^i)  -- Exponentielle Backoff
     end
-    return nil
+
+    -- Standard Executor-Behandlung
+    local methods = {
+        ["synapse"] = function() return syn.request({Url = url}) end,
+        ["krnl"] = function() return http.request(url) end,
+        ["fluxus"] = function() return fluxus.request(url) end,
+        ["electron"] = function() return request(url) end
+    }
+
+    if methods[executor] then
+        local success, response = pcall(methods[executor])
+        if success then
+            return response.Body or response
+        end
+    end
+
+    error("HTTP nicht unterstützt für "..executor)
 end
 
-local function fetchValidServers()
-    local response = safeHttpGet(
-        "https://games.roblox.com/v1/games/"..PlaceID..
-        "/servers/Public?sortOrder=Asc&limit=100"
-    )
-    
-    if not response then
-        debugLog("Serverliste nicht verfügbar")
-        return {}
+local function fetchServers()
+    local success, response = pcall(function()
+        return handleHttpRequest(
+            "https://games.roblox.com/v1/games/"..PlaceID..
+            "/servers/Public?sortOrder=Asc&limit=100"
+        )
+    end)
+
+    if not success then
+        RateLimitCount += 1
+        debugLog("HTTP Fehler:", response)
+        return nil
     end
 
     local success, data = pcall(function()
         return HttpService:JSONDecode(response)
     end)
-    
-    return success and data.data or {}
+
+    return success and data.data or nil
 end
 
-local function selectBestServer(servers)
-    local currentJobId = game.JobId
+local function filterServers(servers)
     local valid = {}
-    
-    for _, server in ipairs(servers) do
-        if server.id ~= currentJobId
+    for _, server in pairs(servers) do
+        if server.id ~= CurrentServerId
             and server.playing >= Config.MinPlayers
-            and (server.maxPlayers - server.playing) >= 1
+            and (server.maxPlayers - server.playing) >= Config.RequiredFreeSlots
         then
             table.insert(valid, server.id)
         end
     end
+    return valid
+end
+
+local function calculateDelay()
+    local delay = Config.BaseDelay * (AttemptCount + 1)
+    return math.min(delay, 30) -- Maximal 30 Sekunden Wartezeit
+end
+
+local function attemptTeleport()
+    local servers = fetchServers()
+    if not servers then return false end
     
-    if #valid > 0 then
-        return valid[math.random(#valid)]
-    end
+    local validServers = filterServers(servers)
+    if #validServers == 0 then return false end
+
+    local target = validServers[math.random(#validServers)]
+    debugLog("Versuche Teleport zu:", target)
+    
+    pcall(function()
+        TeleportService:TeleportToPlaceInstance(PlaceID, target)
+    end)
+    
+    return true
 end
 
-local function attemptTeleport(target)
-    local result = TeleportService:TeleportToPlaceInstance(PlaceID, target)
-    return result == Enum.TeleportResult.Success
-end
-
-local function mainHop()
-    for attempt = 1, Config.MaxAttempts do
-        debugLog(("Versuch %d/%d"):format(attempt, Config.MaxAttempts))
+local function main()
+    while AttemptCount < Config.MaxRetries and RateLimitCount < Config.RateLimitThreshold do
+        AttemptCount += 1
         
-        local servers = fetchValidServers()
-        local target = selectBestServer(servers)
-        
-        if target then
-            debugLog("Gefundener Server: "..target:sub(1, 8).."...")
-            if attemptTeleport(target) then
-                debugLog("Teleport gestartet")
-                task.wait(10)  -- Wartezeit für Teleport
-                return true
-            end
+        if attemptTeleport() then
+            debugLog("Teleport initiiert")
+            return
         end
         
-        local delay = math.floor(Config.BaseDelay * (Config.RetryExponent^attempt))
-        debugLog(("Nächster Versuch in %ds"):format(delay))
+        local delay = calculateDelay()
+        debugLog("Warte", delay.."s ("..AttemptCount.."/"..Config.MaxRetries..")")
         task.wait(delay)
     end
-    
-    debugLog("Fallback zu Standard-Teleport")
+
+    debugLog("Fallback zu normalem Teleport...")
     TeleportService:Teleport(PlaceID)
 end
 
-debugLog("Starte ServerHopper...")
-mainHop()
+-- Ausführung
+debugLog("Starte ServerHopper für PlaceID:", PlaceID)
+main()
