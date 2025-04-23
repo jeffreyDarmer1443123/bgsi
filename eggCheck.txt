@@ -1,5 +1,5 @@
-assert(type(eggName) == "string", "Egg-Name muss ein String sein")
-eggName = eggName:lower():gsub("%s+", "")
+eggName = Config.eggName
+requiredLuck = Config.requiredLuck
 
 local function getEggStats(eggFolder)
     local display = eggFolder:FindFirstChild("Display")
