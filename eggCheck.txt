@@ -2,6 +2,8 @@
 -- Platziere dieses Script z.B. in ServerScriptService.
 -- ► Nur hier anpassen:
 -- Mindest-Luck (Multiplikator)
+local eggName = "void-egg"
+local requiredLuck = 25
 local possibleEggs= {
     "aura-Egg",
     "bunny-Egg",
