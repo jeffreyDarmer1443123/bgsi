@@ -1,8 +1,9 @@
--- Script: EggLuckAndTimeCheck
--- Platziere dieses Script z.B. in ServerScriptService.
--- ► Nur hier anpassen:
-local eggName      = "void-egg"  -- Name des Eggs, z.B. "nightmare-egg"
-local requiredLuck = 5           -- Mindest-Luck (Multiplikator)
+-- eggCheck.lua
+-- Dieses Script wird vom Executor geladen. Es error’t, wenn
+-- das gewünschte Egg nicht gefunden wurde oder Luck < requiredLuck.
+
+local eggName      = "void-egg"  -- anzupassen
+local requiredLuck = 5           -- anzupassen
 local possibleEggs= {
     "aura-Egg",
     "bunny-Egg",
@@ -29,101 +30,41 @@ local possibleLuck = {
     25,
 }
 
--- ► Funktion: Liest Luck-Wert und verbleibende Zeit eines Egg-Folders
--- @param eggFolder  Instance: das Folder-Objekt des Eggs
--- @return luckValue (number) oder nil, timeText (string) oder nil
-local function getEggStats(eggFolder)
-    -- Display → SurfaceGui finden
+-- Hilfsfunktion: liest Luck und liefert Zahl oder nil
+local function getLuck(eggFolder)
     local display = eggFolder:FindFirstChild("Display")
-    if not (display and display:FindFirstChildWhichIsA("SurfaceGui")) then
-        return nil, nil
-    end
-    local surfaceGui = display:FindFirstChildWhichIsA("SurfaceGui")
+    if not (display and display:FindFirstChildWhichIsA("SurfaceGui")) then return nil end
+    local icon = display.SurfaceGui:FindFirstChild("Icon")
+    if not icon then return nil end
+    local label = icon:FindFirstChild("Luck")
+    if not (label and label:IsA("TextLabel")) then return nil end
+    local digits = label.Text:match("%d+")
+    return digits and tonumber(digits) or nil
+end
 
-    -- Icon-Container holen
-    local icon = surfaceGui:FindFirstChild("Icon")
-    if not icon then
-        return nil, nil
-    end
+-- 1) Ordner suchen
+local rifts = workspace:FindFirstChild("Rendered")
+             and workspace.Rendered:FindFirstChild("Rifts")
+if not rifts then
+    error("❌ Rendered.Rifts nicht gefunden.")
+end
 
-    -- Luck-Label im Icon finden
-    local luckLabel = icon:FindFirstChild("Luck")
-    if not (luckLabel and luckLabel:IsA("TextLabel")) then
-        return nil, nil
-    end
-    local digits    = luckLabel.Text:match("%d+")
-    local luckValue = digits and tonumber(digits) or nil
-
-    -- Timer-Label im SurfaceGui finden
-    local timerLabel = surfaceGui:FindFirstChild("Timer")
-    if not timerLabel then
-        for _, obj in ipairs(surfaceGui:GetDescendants()) do
-            if obj:IsA("TextLabel") and obj.Name:lower() == "timer" then
-                timerLabel = obj
-                break
-            end
+-- 2) Kandidaten filtern
+local bestLuck
+for _, folder in ipairs(rifts:GetChildren()) do
+    if folder.Name:lower() == eggName:lower() then
+        local luck = getLuck(folder)
+        if luck and (not bestLuck or luck > bestLuck) then
+            bestLuck = luck
         end
     end
-    local timeText = (timerLabel and timerLabel:IsA("TextLabel")) and timerLabel.Text or nil
-
-    return luckValue, timeText
 end
 
--- ► 1) Finde alle Egg-Instanzen unter workspace.Rendered.Rifts mit diesem Namen
-local rifts = workspace:FindFirstChild("Rendered")
-            and workspace.Rendered:FindFirstChild("Rifts")
-if not rifts then
-    error("Ordner Workspace.Rendered.Rifts nicht gefunden.")
+-- 3) Validierung
+if not bestLuck then
+    error(("❌ Kein Egg '%s' gefunden."):format(eggName))
+elseif bestLuck < requiredLuck then
+    error(("❌ Luck %d < %d für '%s'."):format(bestLuck, requiredLuck, eggName))
+else
+    print(("✅ Egg '%s' mit Luck %d gefunden."):format(eggName, bestLuck))
 end
-
-local candidates = {}
-for _, eggFolder in ipairs(rifts:GetChildren()) do
-    if eggFolder.Name == eggName then
-        table.insert(candidates, eggFolder)
-    end
-end
-
-if #candidates == 0 then
-    print(("❌ Kein Egg namens '%s' gefunden."):format(eggName))
-    return
-end
-
--- ► 2) Wähle das Egg mit dem höchsten Luck-Wert
-local bestEgg, bestLuck, bestTime
-for _, ef in ipairs(candidates) do
-    local luck, timeText = getEggStats(ef)
-    if luck and (not bestLuck or luck > bestLuck) then
-        bestEgg  = ef
-        bestLuck = luck
-        bestTime = timeText
-    end
-end
-
-if not bestEgg then
-    print(("❌ Luck-Wert für '%s' konnte nicht ermittelt werden."):format(eggName))
-    return
-end
-
--- ► 3) Hole Y-Position aus "Output", falls vorhanden
-local outputPart = bestEgg:FindFirstChild("Output")
-local yInfo = ""
-if outputPart and outputPart:IsA("BasePart") then
-    yInfo = (" | Y=%.2f"):format(outputPart.Position.Y)
-end
-
--- ► 4) Ergebnis ausgeben
-local ok       = bestLuck >= requiredLuck
-local icon     = ok and "✅" or "❌"
-local comp     = ok and "≥" or "<"
-local timeInfo = bestTime and (" | Zeit übrig: " .. bestTime) or ""
-
-print(("%s '%s' (Instanz #%d): Luck %d %s %d%s%s"):format(
-    icon,
-    eggName,
-    table.find(candidates, bestEgg),
-    bestLuck,
-    comp,
-    requiredLuck,
-    timeInfo,
-    yInfo
-))
