@@ -1,44 +1,37 @@
--- EggCheck (ohne Konfiguration)
-local function findEgg()
-    local rifts = workspace:FindFirstChild("Rendered") and workspace.Rendered:FindFirstChild("Rifts")
-    if not rifts then return nil end
+-- EggCheck (Prüft Eggs)
+local rifts = workspace:FindFirstChild("Rendered")?.Rifts
+if not rifts then error("❌ Rifts-Ordner nicht gefunden") end
 
-    local candidates = {}
-    for _, egg in ipairs(rifts:GetChildren()) do
-        if egg.Name == eggName then
-            table.insert(candidates, egg)
-        end
+local candidates = {}
+for _, egg in ipairs(rifts:GetChildren()) do
+    if egg.Name == eggName then
+        table.insert(candidates, egg)
     end
-    return candidates
 end
 
-local function getLuck(egg)
-    local display = egg:FindFirstChild("Display")
-    if not display then return 0 end
-    
-    local luckLabel = display:FindFirstChild("Luck", true)
-    if luckLabel and luckLabel:IsA("TextLabel") then
-        return tonumber(luckLabel.Text:match("%d+")) or 0
-    end
-    return 0
+if #candidates == 0 then
+    error("❌ Kein '"..eggName.."' gefunden")
 end
 
--- Hauptlogik
-local candidates = findEgg()
-if not candidates or #candidates == 0 then
-    error("❌ Kein "..eggName.." gefunden")
-end
+local bestLuck = 0
+local bestEgg = nil
 
-local bestEgg, bestLuck
 for _, egg in ipairs(candidates) do
-    local luck = getLuck(egg)
-    if luck > (bestLuck or 0) then
-        bestEgg, bestLuck = egg, luck
+    local display = egg:FindFirstChild("Display")
+    if display then
+        local luckLabel = display:FindFirstChild("Luck", true)
+        if luckLabel and luckLabel:IsA("TextLabel") then
+            local luck = tonumber(luckLabel.Text:match("%d+")) or 0
+            if luck > bestLuck then
+                bestLuck = luck
+                bestEgg = egg
+            end
+        end
     end
 end
 
 if bestLuck >= requiredLuck then
-    print("✅ Passendes Egg gefunden! Luck:", bestLuck)
+    print("✅ Passendes Egg (Luck "..bestLuck..")")
 else
-    error("❌ Luck zu niedrig: "..bestLuck.."/"..requiredLuck)
+    error("❌ Luck "..bestLuck.." < "..requiredLuck)
 end
