@@ -1,7 +1,7 @@
 -- Script: EggLuckAndTimeCheck
 -- Platziere dieses Script z.B. in ServerScriptService.
 -- ► Nur hier anpassen:
-local eggName      = "void-egg"  -- Name des Eggs, z.B. "nightmare-egg"
+local eggName = "void-egg"  -- Name des Eggs, z.B. "nightmare-egg"
 local requiredLuck = 25           -- Mindest-Luck (Multiplikator)
 local possibleEggs= {
     "aura-Egg",
