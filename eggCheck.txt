@@ -113,12 +113,13 @@ if outputPart and outputPart:IsA("BasePart") then
 end
 
 -- ► 4) Ergebnis ausgeben
+-- ► 4) Ergebnis ausgeben
 local ok       = bestLuck >= requiredLuck
 local icon     = ok and "✅" or "❌"
 local comp     = ok and "≥" or "<"
 local timeInfo = bestTime and (" | Zeit übrig: " .. bestTime) or ""
 
-local message = ("%s '%s' (Instanz #%d): Luck %d %s %d%s%s"):format(
+print(("%s '%s' (Instanz #%d): Luck %d %s %d%s%s"):format(
     icon,
     eggName,
     table.find(candidates, bestEgg),
@@ -127,10 +128,4 @@ local message = ("%s '%s' (Instanz #%d): Luck %d %s %d%s%s"):format(
     requiredLuck,
     timeInfo,
     yInfo
-)
-
-if ok then
-    print(message)  -- ✅ wird normal ausgegeben
-else
-    error(message)  -- ❌ löst einen Fehler aus
-end
+))
