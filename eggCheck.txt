@@ -40,14 +40,5 @@ if not bestLuck then
 elseif bestLuck < requiredLuck then
     error(("❌ Luck %d < %d für '%s'."):format(bestLuck, requiredLuck, eggName))
 else
-    print(("%s '%s' (Instanz #%d): Luck %d %s %d%s%s"):format(
-    icon,
-    eggName,
-    table.find(candidates, bestEgg),
-    bestLuck,
-    comp,
-    requiredLuck,
-    timeInfo,
-    yInfo
-    ))
+    print(("✅ Egg '%s' mit Luck %d gefunden."):format(eggName, bestLuck))
 end
