@@ -95,7 +95,7 @@ local status = meets and "✅" or "❌"
 local serverLink = ("https://www.roblox.com/games/%d/?privateServerId=%s"):format(game.PlaceId, game.JobId)
 local msg = string.format(
     "%s %s %d Server:%s Height:%.2f Time:%s",
-    bestEgg.Name, bestLuck, requiredLuck, serverLink, bestHeight, bestTime
+    bestEgg.Name, bestLuck, serverLink, bestHeight, bestTime
 )
 print(msg)
 
