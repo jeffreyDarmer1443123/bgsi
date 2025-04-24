@@ -5,9 +5,9 @@ local requiredLuck = 25
 
 -- Liste mit allen gewünschten Egg-Namen (ohne man-egg)
 local eggNames = {
-    "void-Egg",
-    "rainbow-Egg",
-    "easter3-Egg",
+    "void-egg",
+    "rainbow-egg",
+    "easter3-egg",
     -- weitere Namen hier ergänzen ...
 }
 
