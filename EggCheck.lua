@@ -13,6 +13,52 @@ local eggNames = {
 
 local webhookUrl = _G.webhookUrl
 
+local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
+	local HttpService = game:GetService("HttpService")
+
+	local isManEgg = eggName:lower() == "man-egg"
+	local embedColor = isManEgg and 0x9B59B6 or 0x2ECC71 -- Lila oder Grün
+	local mention = isManEgg and "<@palkins7>" or ""
+
+	local payload = {
+		content = mention,
+		embeds = {{
+			title = "🥚 Ei gefunden!",
+			color = embedColor,
+			fields = {
+				{ name = "🐣 Egg", value = eggName, inline = true },
+				{ name = "💥 Luck", value = tostring(luck), inline = true },
+				{ name = "⏳ Zeit", value = time or "N/A", inline = true },
+				{ name = "📏 Höhe", value = string.format("%.2f", height or 0), inline = true },
+			},
+			footer = {
+				text = string.format("🧭 Server: %s | Spiel: %d", jobId, placeId)
+			}
+		}}
+	}
+
+	local jsonData = HttpService:JSONEncode(payload)
+	local executor = identifyexecutor and identifyexecutor():lower() or "unknown"
+
+	local success, err = pcall(function()
+		if string.find(executor, "synapse") then
+			syn.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData })
+		elseif string.find(executor, "krnl") then
+			http.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData })
+		elseif string.find(executor, "fluxus") then
+			fluxus.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData })
+		elseif string.find(executor, "awp") then
+			request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData })
+		else
+			game:GetService("HttpService"):PostAsync(webhookUrl, jsonData)
+		end
+	end)
+
+	if not success then warn("❌ Webhook fehlgeschlagen:", err) end
+end
+
+
+
 -- ► Funktion: Liest Luck-Wert und verbleibende Zeit eines Egg-Folders
 local function getEggStats(eggFolder)
     local display = eggFolder:FindFirstChild("Display")
