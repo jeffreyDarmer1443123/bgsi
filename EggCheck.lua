@@ -97,7 +97,6 @@ local msg = string.format(
     "%s %s %d Server:%s Height:%.2f Time:%s",
     bestEgg.Name, bestLuck, serverLink, bestHeight, bestTime
 )
-print(msg)
 
 -- nur bei erreichter Luck schicken
 if meets then
