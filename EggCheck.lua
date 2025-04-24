@@ -152,6 +152,7 @@ local message = ("%s '%s': Luck %d %s %d%s%s")
     :format(icon, bestEgg.Name, bestLuck, comp, requiredLuck, timeInfo, yInfo)
 if ok then
     print(message)
+    sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
 else
     error(message)
 end
