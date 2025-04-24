@@ -6,7 +6,7 @@ local eggNames = {
     "easter3-egg",
 }
 
-local webhookUrl = _G.webhookUrl or error("Keine Webhook-URL in _G.webhookUrl definiert!")
+local webhookUrl = shared.webhookUrl or error("Keine Webhook-URL in shared.webhookUrl definiert!")
 
 local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
 	local HttpService = game:GetService("HttpService")
