@@ -11,6 +11,32 @@ local eggNames = {
     -- weitere Namen hier ergänzen ...
 }
 
+local possibleEggs= {
+    "aura-Egg",
+    "bunny-Egg",
+    "common-Egg",
+    "crystal-Egg",
+    "easter-Egg",
+    "easter2-Egg",
+    "hell-Egg",
+    "iceshard-Egg",
+    "inferno-Egg",
+    "lunar-Egg",
+    "magma-Egg",
+    "nightmare-Egg",
+    "pastel-Egg",
+    "rainbow-Egg",
+    "spikey-Egg",
+    "spotted-Egg",
+    "void-Egg",
+}
+local possibleLuck = {
+    5,
+    7,
+    10,
+    25,
+}
+
 -- ► Funktion: Liest Luck-Wert und verbleibende Zeit eines Egg-Folders
 -- @param eggFolder  Instance: das Folder-Objekt des Eggs
 -- @return luckValue (number) oder nil, timeText (string) oder nil
