@@ -93,7 +93,7 @@ if manEgg then
     -- Immer als erfolgreich markieren
     print(("✅ 'man-egg': Luck %s%s%s"):format(luck or "n/A", timeInfo, yInfo))
 else
-    warn("ℹ️ Kein 'man-egg' gefunden.")
+    print("ℹ️ Kein 'man-egg' gefunden.")
 end
 
 -- ► 3) Suche übrige Eggs aus eggNames
