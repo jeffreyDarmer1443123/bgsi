@@ -48,22 +48,20 @@ local function handleHttpRequest(url)
 end
 
 local function fetchServers()
-    local success, response = pcall(function()
-        return handleHttpRequest(
-            "https://games.roblox.com/v1/games/" .. PlaceID ..
-            "/servers/Public?sortOrder=Asc&limit=100"
-        )
-    end)
-    if not success then
+    local url = "https://games.roblox.com/v1/games/" .. PlaceID .. "/servers/Public?sortOrder=Asc&limit=100"
+    local raw = handleHttpRequest(url)
+    if not raw then
         RateLimitCount += 1
-        debugLog("HTTP Fehler:", response)
         return nil
     end
-    local ok, data = pcall(function()
-        return HttpService:JSONDecode(response)
-    end)
-    return ok and data.data or nil
+    local ok, result = pcall(function() return HttpService:JSONDecode(raw) end)
+    if ok and result and result.data then
+        return result.data
+    end
+    RateLimitCount += 1
+    return nil
 end
+
 
 local function filterServers(servers)
     local valid = {}
