@@ -55,28 +55,30 @@ if not rifts then
 end
 
 -- ► 2) Man-Egg ("aura") prüfen und Webhook senden
-local manEgg = rifts:FindFirstChild("aura")
-if manEgg then
-    local luck, timeText = getEggStats(manEgg)
-    local outputPart    = manEgg:FindFirstChild("Output")
-    local posY          = (outputPart and outputPart:IsA("BasePart")) and outputPart.Position.Y or 0
-
-    -- Server-Link
-    local placeId    = game.PlaceId
-    local serverId   = game.JobId
-    local serverLink = ("https://www.roblox.com/games/%d/server/%s"):format(placeId, serverId)
-
-    -- Nachricht formatieren
-    local msg = ("Aura Egg %dx %s Height: %.2f Time: %s")
-        :format(luck or 0, serverLink, posY, timeText or "n/A")
-
-    -- Webhook senden
+local function sendToWebhook(msg)
     local payload = HttpService:JSONEncode({ content = msg })
     HttpService:PostAsync(webhookUrl, payload, Enum.HttpContentType.ApplicationJson)
+end
 
-    print("✅ Aura-Egg gefunden und Webhook gesendet:", msg)
-else
-    warn("ℹ️ Kein 'aura' (Man-Egg) gefunden.")
+local function formatServerLink()
+    return ("https://www.roblox.com/games/%d/server/%s"):format(game.PlaceId, game.JobId)
+end
+
+do
+    local manEgg = rifts:FindFirstChild("aura")
+    if manEgg then
+        local luck, timeText = getEggStats(manEgg)
+        local outputPart = manEgg:FindFirstChild("Output")
+        local posY = (outputPart and outputPart:IsA("BasePart")) and outputPart.Position.Y or 0
+
+        local msg = ("Aura Egg %dx %s Height: %.2f Time: %s")
+            :format(luck or 0, formatServerLink(), posY, timeText or "n/A")
+
+        sendToWebhook(msg)
+        print("✅ Aura-Egg gefunden und Webhook gesendet:", msg)
+    else
+        warn("ℹ️ Kein 'aura' (Man-Egg) gefunden.")
+    end
 end
 
 -- ► 3) Suche übrige Eggs aus eggNames
@@ -112,17 +114,17 @@ if outP and outP:IsA("BasePart") then
     yVal = outP.Position.Y
 end
 
--- ► 6) Ausgabe für das beste Egg
+-- ► 6) Ausgabe & Webhook für das beste Egg
 local ok       = bestLuck >= requiredLuck
-local icon     = ok and "✅" or "❌"
 local comp     = ok and "≥" or "<"
-local timeInfo = bestTime and (" | Zeit übrig: " .. bestTime) or ""
-local message  = ("%s '%s': Luck %d %s %d%s | Height: %.2f"):format(
-    icon, bestEgg.Name, bestLuck, comp, requiredLuck, timeInfo, yVal
-)
+local timeInfo = bestTime and (" | Time: " .. bestTime) or ""
+local msg      = ("Aura Egg %dx %s Height: %.2f Time: %s")
+    :format(bestLuck, formatServerLink(), yVal, bestTime or "n/A")
 
 if ok then
-    print(message)
+    sendToWebhook(msg)
+    print("✅ Bestes Egg gefunden und Webhook gesendet:", msg)
 else
-    error(message)
+    error(("❌ '%s': Luck %d %s %d%s | Height: %.2f")
+        :format(bestEgg.Name, bestLuck, comp, requiredLuck, timeInfo, yVal))
 end
