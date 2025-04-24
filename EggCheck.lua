@@ -11,86 +11,48 @@ local HttpService = game:GetService("HttpService")
 
 -- Executor-spezifische HTTP-POST-Funktion
 -- ► Füge diese Funktion am Anfang des Scripts ein
-local function sendWebhook(message)
-    if not webhookUrl or webhookUrl == "" then
-        warn("Webhook URL nicht gesetzt.")
-        return false
-    end
-    
-    local executor = identifyexecutor and identifyexecutor():lower() or "unknown"
-    local payload = {
-        content = message
-    }
-    
-    print("Versende Webhook mit Executor:", executor)
-    
-    -- Universal HTTP POST für verschiedene Executoren
-    local success, result = pcall(function()
-        if string.find(executor, "synapse") then
-            return syn.request({
-                Url = webhookUrl,
-                Method = "POST",
-                Headers = {["Content-Type"] = "application/json"},
-                Body = game:GetService("HttpService"):JSONEncode(payload)
-            })
-        elseif string.find(executor, "krnl") then
-            return http.request({
-                Url = webhookUrl,
-                Method = "POST",
-                Headers = {["Content-Type"] = "application/json"},
-                Body = game:GetService("HttpService"):JSONEncode(payload)
-            })
-        elseif string.find(executor, "fluxus") then
-            return fluxus.request({
-                Url = webhookUrl,
-                Method = "POST",
-                Headers = {["Content-Type"] = "application/json"},
-                Body = game:GetService("HttpService"):JSONEncode(payload)
-            })
-        else
-            -- Fallback für andere Executoren
-            return game:GetService("HttpService"):PostAsync(
-                webhookUrl, 
-                game:GetService("HttpService"):JSONEncode(payload)
-            )
-        end
-    end)
-    
-    if success then
-        print("Webhook erfolgreich gesendet!")
-        return true
-    else
-        warn("Webhook-Fehler:", result)
-        return false
-    end
-end
+local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
+	local HttpService = game:GetService("HttpService")
 
--- ► In der Ausgabe-Sektion (ersetzte den Webhook-Teil):
-if ok then
-    local serverLink = string.format(
-        "https://www.roblox.com/games/%d/?privateServerId=%s",
-        game.PlaceId,
-        game.JobId
-    )
-    local height = outputPart and string.format("%.2f", outputPart.Position.Y) or "N/A"
-    local webhookMsg = string.format(
-        "%s %d %s Height:%s Time:%s",
-        bestEgg.Name,
-        bestLuck,
-        serverLink,
-        height,
-        bestTime or "N/A"
-    )
-    
-    -- Webhook mit Wiederholungslogik
-    local maxRetries = 3
-    for attempt = 1, maxRetries do
-        if sendWebhook(webhookMsg) then
-            break
-        else
-            task.wait(2)
-        end
-    end
+	local isManEgg = eggName:lower() == "man-egg"
+	local embedColor = isManEgg and 0x9B59B6 or 0x2ECC71 -- Lila oder Grün
+	local mention = isManEgg and "<@palkins7>" or ""
+
+	local payload = {
+		content = mention,
+		embeds = {{
+			title = "🥚 Ei gefunden!",
+			color = embedColor,
+			fields = {
+				{ name = "🐣 Egg", value = eggName, inline = true },
+				{ name = "💥 Luck", value = tostring(luck), inline = true },
+				{ name = "⏳ Zeit", value = time or "N/A", inline = true },
+				{ name = "📏 Höhe", value = string.format("%.2f", height or 0), inline = true },
+			},
+			footer = {
+				text = string.format("🧭 Server: %s | Spiel: %d", jobId, placeId)
+			}
+		}}
+	}
+
+	local jsonData = HttpService:JSONEncode(payload)
+	local executor = identifyexecutor and identifyexecutor():lower() or "unknown"
+
+	local success, err = pcall(function()
+		if string.find(executor, "synapse") then
+			syn.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData })
+		elseif string.find(executor, "krnl") then
+			http.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData })
+		elseif string.find(executor, "fluxus") then
+			fluxus.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData })
+		elseif string.find(executor, "awp") then
+			request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData })
+		else
+			game:GetService("HttpService"):PostAsync(webhookUrl, jsonData)
+		end
+	end)
+
+	if not success then warn("❌ Webhook fehlgeschlagen:", err) end
 end
 
 -- Funktion zum Lesen von Luck und Timer
