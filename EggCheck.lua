@@ -64,7 +64,7 @@ if manEgg then
         yInfo = (" | Y=%.2f"):format(heightVal)
     end
     local timeInfo = timeText and (" | Zeit übrig: " .. timeText) or ""
-    print(("✅ 'aura-egg': Luck %s%s%s"):format(luck or "n/A", timeInfo, yInfo))
+    print(("✅ 'man-egg': Luck %s%s%s"):format(luck or "n/A", timeInfo, yInfo))
 else
     warn("ℹ️ Kein 'man-egg' gefunden.")
 end
@@ -72,7 +72,7 @@ end
 -- ► 3) Suche übrige Eggs aus eggNames
 local candidates = {}
 for _, eggFolder in ipairs(rifts:GetChildren()) do
-    if eggFolder.Name ~= "aura" and table.find(eggNames, eggFolder.Name) then
+    if eggFolder.Name ~= "man-egg" and table.find(eggNames, eggFolder.Name) then
         table.insert(candidates, eggFolder)
     end
 end
