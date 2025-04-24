@@ -60,7 +60,7 @@ end
 
 
 -- ► Funktion: Liest Luck-Wert und verbleibende Zeit eines Egg-Folders
-l-- Vereinfachte getEggStats
+-- Vereinfachte getEggStats
 local function getEggStats(eggFolder)
     local gui = eggFolder:FindFirstChild("Display"):FindFirstChildWhichIsA("SurfaceGui")
     if not gui then return nil, nil end
