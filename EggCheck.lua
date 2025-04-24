@@ -1,4 +1,4 @@
--- Script: EggLuckAndTimeCheck mit Webhook-Benachrichtigung
+-- Script: EggLuckAndTimeCheck
 -- Platziere dieses Script z.B. in ServerScriptService.
 -- ► Nur hier anpassen:
 local requiredLuck = 25
@@ -11,11 +11,72 @@ local eggNames = {
     -- weitere Namen hier ergänzen ...
 }
 
--- ► Webhook URL (aus dem ausgeführten Script übernommen)
-local webhookUrl = _G.webhookUrl
 
--- Discord Webhook via HttpService
-local HttpService = game:GetService("HttpService")
+local function sendWebhook(message)
+    if not _G.webhookUrl then
+        warn("Webhook URL nicht gesetzt.")
+        return
+    end
+    
+    local executor = identifyexecutor and identifyexecutor():lower() or "unknown"
+    local payload = {
+        content = message
+    }
+    
+    -- Universal HTTP POST für verschiedene Executoren
+    local success, result = pcall(function()
+        if string.find(executor, "synapse") then
+            return syn.request({
+                Url = _G.webhookUrl,
+                Method = "POST",
+                Headers = {["Content-Type"] = "application/json"},
+                Body = game:GetService("HttpService"):JSONEncode(payload)
+            })
+        elseif string.find(executor, "krnl") then
+            return http.request({
+                Url = _G.webhookUrl,
+                Method = "POST",
+                Headers = {["Content-Type"] = "application/json"},
+                Body = game:GetService("HttpService"):JSONEncode(payload)
+            })
+        else
+            -- Fallback für andere Executoren
+            return game:GetService("HttpService"):PostAsync(
+                _G.webhookUrl, 
+                game:GetService("HttpService"):JSONEncode(payload)
+        end
+    end)
+    
+    if not success then
+        warn("Webhook konnte nicht gesendet werden:", result)
+    end
+end
+
+-- ► 6) Ausgabe für das beste Egg (ergänzte Webhook-Funktion)
+local ok = bestLuck >= requiredLuck
+local icon = ok and "✅" or "❌"
+local comp = ok and "≥" or "<"
+local timeInfo = bestTime and (" | Zeit übrig: " .. bestTime) or ""
+
+-- Webhook-Nachricht erstellen
+if ok then
+    local serverLink = string.format(
+        "https://www.roblox.com/games/%d/?shard=%s",
+        game.PlaceId,
+        game.JobId
+    )
+    local height = outputPart and string.format("%.2f", outputPart.Position.Y) or "N/A"
+    local webhookMsg = string.format(
+        "%s %d %s Height: %s Time: %s",
+        bestEgg.Name,
+        bestLuck,
+        serverLink,
+        height,
+        bestTime or "N/A"
+    )
+    sendWebhook(webhookMsg)
+end
+
 
 -- ► Funktion: Liest Luck-Wert und verbleibende Zeit eines Egg-Folders
 local function getEggStats(eggFolder)
@@ -32,7 +93,6 @@ local function getEggStats(eggFolder)
     end
     local digits = luckLabel.Text:match("%d+")
     local luckValue = digits and tonumber(digits) or nil
-    
     local timerLabel = surfaceGui:FindFirstChild("Timer")
     if not timerLabel then
         for _, obj in ipairs(surfaceGui:GetDescendants()) do
@@ -53,18 +113,17 @@ if not rifts then
 end
 
 -- ► 2) Man-Egg immer ausgeben, falls vorhanden
-local manEgg = rifts:FindFirstChild("man-egg")
+local manEgg = rifts:FindFirstChild("aura")
 if manEgg then
     local luck, timeText = getEggStats(manEgg)
     local yInfo = ""
     local outputPart = manEgg:FindFirstChild("Output")
-    local heightVal
     if outputPart and outputPart:IsA("BasePart") then
-        heightVal = outputPart.Position.Y
-        yInfo = (" | Y=%.2f"):format(heightVal)
+        yInfo = (" | Y=%.2f"):format(outputPart.Position.Y)
     end
     local timeInfo = timeText and (" | Zeit übrig: " .. timeText) or ""
-    print(("✅ 'man-egg': Luck %s%s%s"):format(luck or "n/A", timeInfo, yInfo))
+    -- Immer als erfolgreich markieren
+    print(("✅ 'aura-egg': Luck %s%s%s"):format(luck or "n/A", timeInfo, yInfo))
 else
     warn("ℹ️ Kein 'man-egg' gefunden.")
 end
@@ -72,7 +131,7 @@ end
 -- ► 3) Suche übrige Eggs aus eggNames
 local candidates = {}
 for _, eggFolder in ipairs(rifts:GetChildren()) do
-    if eggFolder.Name ~= "man-egg" and table.find(eggNames, eggFolder.Name) then
+    if eggFolder.Name ~= "aura" and table.find(eggNames, eggFolder.Name) then
         table.insert(candidates, eggFolder)
     end
 end
@@ -82,17 +141,13 @@ if #candidates == 0 then
 end
 
 -- ► 4) Bestes Egg nach Luck finden
-local bestEgg, bestLuck, bestTime, bestHeight
+local bestEgg, bestLuck, bestTime
 for _, ef in ipairs(candidates) do
     local luck, timeText = getEggStats(ef)
     if luck and (not bestLuck or luck > bestLuck) then
         bestEgg = ef
         bestLuck = luck
         bestTime = timeText
-        local out = ef:FindFirstChild("Output")
-        if out and out:IsA("BasePart") then
-            bestHeight = out.Position.Y
-        end
     end
 end
 if not bestEgg then
@@ -100,22 +155,22 @@ if not bestEgg then
     return
 end
 
--- ► 5) Ausgabe für das beste Egg und Webhook
+-- ► 5) Y-Position des besten Eggs
+local yInfo = ""
+local outputPart = bestEgg:FindFirstChild("Output")
+if outputPart and outputPart:IsA("BasePart") then
+    yInfo = (" | Y=%.2f"):format(outputPart.Position.Y)
+end
+
+-- ► 6) Ausgabe für das beste Egg
 local ok = bestLuck >= requiredLuck
 local icon = ok and "✅" or "❌"
 local comp = ok and "≥" or "<"
 local timeInfo = bestTime and (" | Zeit übrig: " .. bestTime) or ""
-local heightInfo = bestHeight and (" | Height: " .. string.format("%.2f", bestHeight)) or ""
-local serverLink = game.JobId -- als Platzhalter für den Serverlink
-local messageText = string.format("%s %s %d Server:%s%s%s", bestEgg.Name, bestLuck, requiredLuck, serverLink, heightInfo, timeInfo)
-
+local message = ("%s '%s': Luck %d %s %d%s%s")
+    :format(icon, bestEgg.Name, bestLuck, comp, requiredLuck, timeInfo, yInfo)
 if ok then
-    print(messageText)
-    -- Discord-Webhook senden
-    local payload = {
-        content = string.format("%s %d %s Height:%.2f Time:%s", bestEgg.Name, bestLuck, serverLink, bestHeight or 0, bestTime or "n/A")
-    }
-    HttpService:PostAsync(webhookUrl, HttpService:JSONEncode(payload), Enum.HttpContentType.ApplicationJson)
+    print(message)
 else
-    error(("%s '%s': Luck %d %s %d%s%s"):format(icon, bestEgg.Name, bestLuck, comp, requiredLuck, timeInfo, heightInfo))
+    error(message)
 end
