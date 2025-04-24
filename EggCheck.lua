@@ -1,107 +1,109 @@
--- Script: EggLuckAndTimeCheck mit Discord-Webhook (Exploit-kompatibel)
--- Platziere dieses Script in deinem Auto-Execute-Ordner.
--- ► Definiere die Webhook-URL im Loader via _G.webhookUrl
-
+-- Script: EggLuckAndTimeCheck
+-- Platziere dieses Script z.B. in ServerScriptService.
+-- ► Nur hier anpassen:
 local requiredLuck = 25
-local eggNames = {"void-egg","rainbow-egg","easter3-egg"}
 
--- Hole Webhook-URL aus Loader
-local webhookUrl = _G.webhookUrl or error("Keine Webhook-URL in _G.webhookUrl definiert!")
+-- Liste mit allen gewünschten Egg-Namen (ohne man-egg)
+local eggNames = {
+    "void-egg",
+    "rainbow-egg",
+    "easter3-egg",
+    -- weitere Namen hier ergänzen ...
+}
 
--- Universal HTTP-Handler für Exploits
-local function handleHttpRequest(url, method, body)
-    method = method or "GET"
-    local executor = identifyexecutor and identifyexecutor():lower() or "unknown"
-    -- AWP
-    if executor:find("awp") then
-        local ok, res = pcall(function() return game:HttpGet(url) end)
-        if ok then return res end
+-- ► Funktion: Liest Luck-Wert und verbleibende Zeit eines Egg-Folders
+local function getEggStats(eggFolder)
+    local display = eggFolder:FindFirstChild("Display")
+    if not (display and display:FindFirstChildWhichIsA("SurfaceGui")) then
+        return nil, nil
     end
-    -- Exploit-spezifisch
-    local methods = {
-        synapse = function()
-            return syn.request({Url = url, Method = method, Headers = {["Content-Type"]="application/json"}, Body = body})
-        end,
-        krnl    = function()
-            return http.request({Url = url, Method = method, Headers = {["Content-Type"]="application/json"}, Body = body})
-        end,
-        fluxus  = function()
-            return fluxus.request({Url = url, Method = method, Headers = {["Content-Type"]="application/json"}, Body = body})
-        end,
-        electron= function()
-            return request({Url = url, Method = method, Headers = {["Content-Type"]="application/json"}, Body = body})
-        end,
-    }
-    local fn = methods[executor]
-    if fn then
-        local ok, res = pcall(fn)
-        if ok then
-            return (res.Body or res)
+    local surfaceGui = display:FindFirstChildWhichIsA("SurfaceGui")
+    local icon = surfaceGui:FindFirstChild("Icon")
+    if not icon then return nil, nil end
+    local luckLabel = icon:FindFirstChild("Luck")
+    if not (luckLabel and luckLabel:IsA("TextLabel")) then
+        return nil, nil
+    end
+    local digits = luckLabel.Text:match("%d+")
+    local luckValue = digits and tonumber(digits) or nil
+    local timerLabel = surfaceGui:FindFirstChild("Timer")
+    if not timerLabel then
+        for _, obj in ipairs(surfaceGui:GetDescendants()) do
+            if obj:IsA("TextLabel") and obj.Name:lower() == "timer" then
+                timerLabel = obj
+                break
+            end
         end
     end
-    error("HTTP nicht unterstützt für executor: "..executor)
+    local timeText = (timerLabel and timerLabel:IsA("TextLabel")) and timerLabel.Text or nil
+    return luckValue, timeText
 end
 
--- Erzeuge Discord-Webhook Request
-local function sendToWebhook(msg)
-    local payload = ({ content = msg })
-    local body = game:GetService("HttpService"):JSONEncode(payload)
-    handleHttpRequest(webhookUrl, "POST", body)
+-- ► 1) Zugriff auf Rifts-Ordner
+local rifts = workspace:FindFirstChild("Rendered") and workspace.Rendered:FindFirstChild("Rifts")
+if not rifts then
+    error("Ordner Workspace.Rendered.Rifts nicht gefunden.")
 end
 
--- Hilfsfunktion zum Link
-local function formatServerLink()
-    return ("https://www.roblox.com/games/%d/server/%s"):format(game.PlaceId, game.JobId)
-end
-
--- Liest Luck und Timer aus einem Egg
-local function getEggStats(folder)
-    local disp = folder:FindFirstChild("Display")
-    if not disp then return nil,nil end
-    local gui = disp:FindFirstChildWhichIsA("SurfaceGui")
-    if not gui then return nil,nil end
-    local icon = gui:FindFirstChild("Icon")
-    local luckLbl = icon and icon:FindFirstChild("Luck")
-    local luck = luckLbl and tonumber(luckLbl.Text:match("%d+")) or nil
-    local timerLbl = gui:FindFirstChild("Timer")
-    if not timerLbl then
-        for _,c in ipairs(gui:GetDescendants()) do
-            if c:IsA("TextLabel") and c.Name:lower()=="timer" then timerLbl=c break end
-        end
+-- ► 2) Man-Egg immer ausgeben, falls vorhanden
+local manEgg = rifts:FindFirstChild("aura")
+if manEgg then
+    local luck, timeText = getEggStats(manEgg)
+    local yInfo = ""
+    local outputPart = manEgg:FindFirstChild("Output")
+    if outputPart and outputPart:IsA("BasePart") then
+        yInfo = (" | Y=%.2f"):format(outputPart.Position.Y)
     end
-    local timeTxt = timerLbl and timerLbl.Text or "n/A"
-    return luck, timeTxt
-end
-
--- Warte auf Rifts
-local rifts = workspace:WaitForChild("Rendered"):WaitForChild("Rifts")
-
--- Verarbeite ein einzelnes Egg
-local function processEgg(folder, displayName)
-    local luck, timeTxt = getEggStats(folder)
-    if not luck then return end
-    local out = folder:FindFirstChild("Output")
-    local y = out and out.Position.Y or 0
-    local msg = ("%s Egg %dx %s Height: %.2f Time: %s"):format(
-        displayName, luck, formatServerLink(), y, timeTxt
-    )
-    pcall(sendToWebhook, msg)
-    print("✅ Webhook gesendet:", msg)
-end
-
--- 1) Aura-Egg
-local aura = rifts:FindFirstChild("aura")
-if aura then
-    processEgg(aura, "Aura")
+    local timeInfo = timeText and (" | Zeit übrig: " .. timeText) or ""
+    -- Immer als erfolgreich markieren
+    print(("✅ 'aura-egg': Luck %s%s%s"):format(luck or "n/A", timeInfo, yInfo))
 else
-    warn("ℹ️ Kein Aura-Egg gefunden.")
+    warn("ℹ️ Kein 'man-egg' gefunden.")
 end
 
--- 2) Weitere Eggs
-for _,name in ipairs(eggNames) do
-    local folder = rifts:FindFirstChild(name)
-    if folder then
-        local displayName = name:gsub("%-"," "):gsub("^%l",string.upper)
-        processEgg(folder, displayName)
+-- ► 3) Suche übrige Eggs aus eggNames
+local candidates = {}
+for _, eggFolder in ipairs(rifts:GetChildren()) do
+    if eggFolder.Name ~= "aura" and table.find(eggNames, eggFolder.Name) then
+        table.insert(candidates, eggFolder)
     end
+end
+if #candidates == 0 then
+    error(("❌ Kein Egg mit den Namen %s gefunden."):format(table.concat(eggNames, ", ")))
+    return
+end
+
+-- ► 4) Bestes Egg nach Luck finden
+local bestEgg, bestLuck, bestTime
+for _, ef in ipairs(candidates) do
+    local luck, timeText = getEggStats(ef)
+    if luck and (not bestLuck or luck > bestLuck) then
+        bestEgg = ef
+        bestLuck = luck
+        bestTime = timeText
+    end
+end
+if not bestEgg then
+    error(("❌ Luck-Wert für Eggs %s konnte nicht ermittelt werden."):format(table.concat(eggNames, ", ")))
+    return
+end
+
+-- ► 5) Y-Position des besten Eggs
+local yInfo = ""
+local outputPart = bestEgg:FindFirstChild("Output")
+if outputPart and outputPart:IsA("BasePart") then
+    yInfo = (" | Y=%.2f"):format(outputPart.Position.Y)
+end
+
+-- ► 6) Ausgabe für das beste Egg
+local ok = bestLuck >= requiredLuck
+local icon = ok and "✅" or "❌"
+local comp = ok and "≥" or "<"
+local timeInfo = bestTime and (" | Zeit übrig: " .. bestTime) or ""
+local message = ("%s '%s': Luck %d %s %d%s%s")
+    :format(icon, bestEgg.Name, bestLuck, comp, requiredLuck, timeInfo, yInfo)
+if ok then
+    print(message)
+else
+    error(message)
 end
