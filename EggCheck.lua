@@ -2,53 +2,30 @@
 -- Platziere dieses Script z.B. in ServerScriptService.
 -- ► Nur hier anpassen:
 -- Mindest-Luck (Multiplikator)
-local eggName = "void-egg"
 local requiredLuck = 25
-local possibleEggs= {
-    "aura-Egg",
-    "bunny-Egg",
-    "common-Egg",
-    "crystal-Egg",
-    "easter-Egg",
-    "easter2-Egg",
-    "hell-Egg",
-    "iceshard-Egg",
-    "inferno-Egg",
-    "lunar-Egg",
-    "magma-Egg",
-    "nightmare-Egg",
-    "pastel-Egg",
-    "rainbow-Egg",
-    "spikey-Egg",
-    "spotted-Egg",
-    "void-Egg",
-}
-local possibleLuck = {
-    5,
-    7,
-    10,
-    25,
-}
 
+-- Liste mit allen gewünschten Egg-Namen
+local eggNames = {
+    "void-Egg",
+    "rainbow-Egg",
+    -- weitere Namen hier ergänzen ...
+}
 
 -- ► Funktion: Liest Luck-Wert und verbleibende Zeit eines Egg-Folders
 -- @param eggFolder  Instance: das Folder-Objekt des Eggs
 -- @return luckValue (number) oder nil, timeText (string) oder nil
 local function getEggStats(eggFolder)
-    -- Display → SurfaceGui finden
     local display = eggFolder:FindFirstChild("Display")
     if not (display and display:FindFirstChildWhichIsA("SurfaceGui")) then
         return nil, nil
     end
     local surfaceGui = display:FindFirstChildWhichIsA("SurfaceGui")
 
-    -- Icon-Container holen
     local icon = surfaceGui:FindFirstChild("Icon")
     if not icon then
         return nil, nil
     end
 
-    -- Luck-Label im Icon finden
     local luckLabel = icon:FindFirstChild("Luck")
     if not (luckLabel and luckLabel:IsA("TextLabel")) then
         return nil, nil
@@ -56,7 +33,6 @@ local function getEggStats(eggFolder)
     local digits    = luckLabel.Text:match("%d+")
     local luckValue = digits and tonumber(digits) or nil
 
-    -- Timer-Label im SurfaceGui finden
     local timerLabel = surfaceGui:FindFirstChild("Timer")
     if not timerLabel then
         for _, obj in ipairs(surfaceGui:GetDescendants()) do
@@ -71,7 +47,7 @@ local function getEggStats(eggFolder)
     return luckValue, timeText
 end
 
--- ► 1) Finde alle Egg-Instanzen unter workspace.Rendered.Rifts mit diesem Namen
+-- ► 1) Finde alle Egg-Instanzen unter workspace.Rendered.Rifts mit Namen aus eggNames
 local rifts = workspace:FindFirstChild("Rendered")
             and workspace.Rendered:FindFirstChild("Rifts")
 if not rifts then
@@ -80,13 +56,14 @@ end
 
 local candidates = {}
 for _, eggFolder in ipairs(rifts:GetChildren()) do
-    if eggFolder.Name == eggName then
+    -- Ist der Name in unserer eggNames-Liste?
+    if table.find(eggNames, eggFolder.Name) then
         table.insert(candidates, eggFolder)
     end
 end
 
 if #candidates == 0 then
-    error(("❌ Kein Egg namens '%s' gefunden."):format(eggName))
+    error(("❌ Kein Egg mit einem der Namen %s gefunden."):format(table.concat(eggNames, ", ")))
     return
 end
 
@@ -102,7 +79,7 @@ for _, ef in ipairs(candidates) do
 end
 
 if not bestEgg then
-    error(("❌ Luck-Wert für '%s' konnte nicht ermittelt werden."):format(eggName))
+    error(("❌ Luck-Wert für Eggs %s konnte nicht ermittelt werden."):format(table.concat(eggNames, ", ")))
     return
 end
 
@@ -119,10 +96,9 @@ local icon     = ok and "✅" or "❌"
 local comp     = ok and "≥" or "<"
 local timeInfo = bestTime and (" | Zeit übrig: " .. bestTime) or ""
 
-local message = ("%s '%s' (Instanz #%d): Luck %d %s %d%s%s"):format(
+local message = ("%s '%s' : Luck %d %s %d%s%s"):format(
     icon,
-    eggName,
-    table.find(candidates, bestEgg),
+    bestEgg.Name,
     bestLuck,
     comp,
     requiredLuck,
