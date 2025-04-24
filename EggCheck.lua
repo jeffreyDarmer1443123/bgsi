@@ -60,32 +60,19 @@ end
 
 
 -- ► Funktion: Liest Luck-Wert und verbleibende Zeit eines Egg-Folders
+l-- Vereinfachte getEggStats
 local function getEggStats(eggFolder)
-    local display = eggFolder:FindFirstChild("Display")
-    if not (display and display:FindFirstChildWhichIsA("SurfaceGui")) then
-        return nil, nil
-    end
-    local surfaceGui = display:FindFirstChildWhichIsA("SurfaceGui")
-    local icon = surfaceGui:FindFirstChild("Icon")
-    if not icon then return nil, nil end
-    local luckLabel = icon:FindFirstChild("Luck")
-    if not (luckLabel and luckLabel:IsA("TextLabel")) then
-        return nil, nil
-    end
-    local digits = luckLabel.Text:match("%d+")
-    local luckValue = digits and tonumber(digits) or nil
-    local timerLabel = surfaceGui:FindFirstChild("Timer")
-    if not timerLabel then
-        for _, obj in ipairs(surfaceGui:GetDescendants()) do
-            if obj:IsA("TextLabel") and obj.Name:lower() == "timer" then
-                timerLabel = obj
-                break
-            end
-        end
-    end
-    local timeText = (timerLabel and timerLabel:IsA("TextLabel")) and timerLabel.Text or nil
+    local gui = eggFolder:FindFirstChild("Display"):FindFirstChildWhichIsA("SurfaceGui")
+    if not gui then return nil, nil end
+
+    local luckText = gui:FindFirstChild("Icon") and gui.Icon:FindFirstChild("Luck")
+    local timer = gui:FindFirstChild("Timer") or gui:FindFirstChildWhichIsA("TextLabel")
+    
+    local luckValue = luckText and tonumber(luckText.Text:match("%d+")) or nil
+    local timeText = timer and timer.Text or nil
     return luckValue, timeText
 end
+
 
 -- ► 1) Zugriff auf Rifts-Ordner
 local rifts = workspace:FindFirstChild("Rendered") and workspace.Rendered:FindFirstChild("Rifts")
@@ -152,7 +139,14 @@ local message = ("%s '%s': Luck %d %s %d%s%s")
     :format(icon, bestEgg.Name, bestLuck, comp, requiredLuck, timeInfo, yInfo)
 if ok then
     print(message)
-    sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
+    sendWebhookEmbed(
+    bestEgg.Name,
+    bestLuck,
+    bestTime,
+    outputPart and outputPart.Position.Y or 0,
+    game.JobId,
+    game.PlaceId
+)
 else
     error(message)
 end
