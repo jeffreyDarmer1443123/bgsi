@@ -94,7 +94,7 @@ if not rifts then
 end
 
 -- ► 2) Man-Egg immer ausgeben, falls vorhanden
-local manEgg = rifts:FindFirstChild("aura")
+local manEgg = rifts:FindFirstChild("man-egg")
 if manEgg then
     local luck, timeText = getEggStats(manEgg)
     local yInfo = ""
@@ -104,7 +104,7 @@ if manEgg then
     end
     local timeInfo = timeText and (" | Zeit übrig: " .. timeText) or ""
     -- Immer als erfolgreich markieren
-    print(("✅ 'aura-egg': Luck %s%s%s"):format(luck or "n/A", timeInfo, yInfo))
+    print(("✅ 'man-egg': Luck %s%s%s"):format(luck or "n/A", timeInfo, yInfo))
 else
     warn("ℹ️ Kein 'man-egg' gefunden.")
 end
@@ -112,7 +112,7 @@ end
 -- ► 3) Suche übrige Eggs aus eggNames
 local candidates = {}
 for _, eggFolder in ipairs(rifts:GetChildren()) do
-    if eggFolder.Name ~= "aura" and table.find(eggNames, eggFolder.Name) then
+    if eggFolder.Name ~= "man-egg" and table.find(eggNames, eggFolder.Name) then
         table.insert(candidates, eggFolder)
     end
 end
