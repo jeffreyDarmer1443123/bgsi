@@ -1,47 +1,17 @@
 -- Script: EggLuckAndTimeCheck
 -- Platziere dieses Script z.B. in ServerScriptService.
 -- ► Nur hier anpassen:
--- Mindest-Luck (Multiplikator)
 local requiredLuck = 25
 
--- Liste mit allen gewünschten Egg-Namen
+-- Liste mit allen gewünschten Egg-Namen (ohne man-egg)
 local eggNames = {
     "void-Egg",
     "rainbow-Egg",
     "easter3-Egg",
-    "man-egg",
     -- weitere Namen hier ergänzen ...
 }
 
-local possibleEggs= {
-    "aura-Egg",
-    "bunny-Egg",
-    "common-Egg",
-    "crystal-Egg",
-    "easter-Egg",
-    "easter2-Egg",
-    "hell-Egg",
-    "iceshard-Egg",
-    "inferno-Egg",
-    "lunar-Egg",
-    "magma-Egg",
-    "nightmare-Egg",
-    "pastel-Egg",
-    "rainbow-Egg",
-    "spikey-Egg",
-    "spotted-Egg",
-    "void-Egg",
-}
-local possibleLuck = {
-    5,
-    7,
-    10,
-    25,
-}
-
 -- ► Funktion: Liest Luck-Wert und verbleibende Zeit eines Egg-Folders
--- @param eggFolder  Instance: das Folder-Objekt des Eggs
--- @return luckValue (number) oder nil, timeText (string) oder nil
 local function getEggStats(eggFolder)
     local display = eggFolder:FindFirstChild("Display")
     if not (display and display:FindFirstChildWhichIsA("SurfaceGui")) then
@@ -50,9 +20,7 @@ local function getEggStats(eggFolder)
     local surfaceGui = display:FindFirstChildWhichIsA("SurfaceGui")
 
     local icon = surfaceGui:FindFirstChild("Icon")
-    if not icon then
-        return nil, nil
-    end
+    if not icon then return nil, nil end
 
     local luckLabel = icon:FindFirstChild("Luck")
     if not (luckLabel and luckLabel:IsA("TextLabel")) then
@@ -75,27 +43,47 @@ local function getEggStats(eggFolder)
     return luckValue, timeText
 end
 
--- ► 1) Finde alle Egg-Instanzen unter workspace.Rendered.Rifts mit Namen aus eggNames
+-- ► 1) Zugriff auf Rifts-Ordner
 local rifts = workspace:FindFirstChild("Rendered")
             and workspace.Rendered:FindFirstChild("Rifts")
 if not rifts then
     error("Ordner Workspace.Rendered.Rifts nicht gefunden.")
 end
 
+-- ► 2) Man-Egg immer ausgeben, falls vorhanden
+local manEgg = rifts:FindFirstChild("man-egg")
+if manEgg then
+    local luck, timeText = getEggStats(manEgg)
+    local yInfo = ""
+    local outputPart = manEgg:FindFirstChild("Output")
+    if outputPart and outputPart:IsA("BasePart") then
+        yInfo = (" | Y=%.2f"):format(outputPart.Position.Y)
+    end
+    local timeInfo = timeText and (" | Zeit übrig: " .. timeText) or ""
+    -- Immer als erfolgreich markieren
+    print(("✅ 'man-egg': Luck %s%s%s")
+        :format(luck or "n/A", timeInfo, yInfo)
+    )
+else
+    warn("ℹ️ Kein 'man-egg' gefunden.")
+end
+
+-- ► 3) Suche übrige Eggs aus eggNames
 local candidates = {}
 for _, eggFolder in ipairs(rifts:GetChildren()) do
-    -- Ist der Name in unserer eggNames-Liste?
-    if table.find(eggNames, eggFolder.Name) then
+    if eggFolder.Name ~= "man-egg" and table.find(eggNames, eggFolder.Name) then
         table.insert(candidates, eggFolder)
     end
 end
 
 if #candidates == 0 then
-    error(("❌ Kein Egg mit einem der Namen %s gefunden."):format(table.concat(eggNames, ", ")))
+    error(("❌ Kein Egg mit den Namen %s gefunden.")
+        :format(table.concat(eggNames, ", "))
+    )
     return
 end
 
--- ► 2) Wähle das Egg mit dem höchsten Luck-Wert
+-- ► 4) Bestes Egg nach Luck finden
 local bestEgg, bestLuck, bestTime
 for _, ef in ipairs(candidates) do
     local luck, timeText = getEggStats(ef)
@@ -107,35 +95,29 @@ for _, ef in ipairs(candidates) do
 end
 
 if not bestEgg then
-    error(("❌ Luck-Wert für Eggs %s konnte nicht ermittelt werden."):format(table.concat(eggNames, ", ")))
+    error(("❌ Luck-Wert für Eggs %s konnte nicht ermittelt werden.")
+        :format(table.concat(eggNames, ", "))
+    )
     return
 end
 
--- ► 3) Hole Y-Position aus "Output", falls vorhanden
-local outputPart = bestEgg:FindFirstChild("Output")
+-- ► 5) Y-Position des besten Eggs
 local yInfo = ""
+local outputPart = bestEgg:FindFirstChild("Output")
 if outputPart and outputPart:IsA("BasePart") then
     yInfo = (" | Y=%.2f"):format(outputPart.Position.Y)
 end
 
--- ► 4) Ergebnis ausgeben
+-- ► 6) Ausgabe für das beste Egg
 local ok       = bestLuck >= requiredLuck
 local icon     = ok and "✅" or "❌"
 local comp     = ok and "≥" or "<"
 local timeInfo = bestTime and (" | Zeit übrig: " .. bestTime) or ""
-
-local message = ("%s '%s' : Luck %d %s %d%s%s"):format(
-    icon,
-    bestEgg.Name,
-    bestLuck,
-    comp,
-    requiredLuck,
-    timeInfo,
-    yInfo
-)
+local message  = ("%s '%s': Luck %d %s %d%s%s")
+    :format(icon, bestEgg.Name, bestLuck, comp, requiredLuck, timeInfo, yInfo)
 
 if ok then
-    print(message)  -- ✅ wird normal ausgegeben
+    print(message)
 else
-    error(message)  -- ❌ löst einen Fehler aus
+    error(message)
 end
