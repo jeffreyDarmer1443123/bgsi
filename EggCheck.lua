@@ -1,14 +1,9 @@
--- Script: EggLuckAndTimeCheck
--- Platziere dieses Script z.B. in ServerScriptService.
--- ► Nur hier anpassen:
 local requiredLuck = 25
 
--- Liste mit allen gewünschten Egg-Namen (ohne man-egg)
 local eggNames = {
     "void-egg",
     "rainbow-egg",
     "easter3-egg",
-    -- weitere Namen hier ergänzen ...
 }
 
 local webhookUrl = _G.webhookUrl or error("Keine Webhook-URL in _G.webhookUrl definiert!")
@@ -17,7 +12,7 @@ local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
 	local HttpService = game:GetService("HttpService")
 
 	local isManEgg = eggName:lower() == "man-egg"
-	local embedColor = isManEgg and 0x9B59B6 or 0x2ECC71 -- Lila oder Grün
+	local embedColor = isManEgg and 0x9B59B6 or 0x2ECC71
 	local mention = isManEgg and "<@palkins7>" or ""
 
 	local payload = {
@@ -59,8 +54,6 @@ end
 
 
 
--- ► Funktion: Liest Luck-Wert und verbleibende Zeit eines Egg-Folders
--- Vereinfachte getEggStats
 local function getEggStats(eggFolder)
     local gui = eggFolder:FindFirstChild("Display"):FindFirstChildWhichIsA("SurfaceGui")
     if not gui then return nil, nil end
@@ -74,13 +67,11 @@ local function getEggStats(eggFolder)
 end
 
 
--- ► 1) Zugriff auf Rifts-Ordner
 local rifts = workspace:FindFirstChild("Rendered") and workspace.Rendered:FindFirstChild("Rifts")
 if not rifts then
     error("Ordner Workspace.Rendered.Rifts nicht gefunden.")
 end
 
--- ► 2) Man-Egg immer ausgeben, falls vorhanden
 local manEgg = rifts:FindFirstChild("man-egg")
 if manEgg then
     local luck, timeText = getEggStats(manEgg)
@@ -90,13 +81,11 @@ if manEgg then
         yInfo = (" | Y=%.2f"):format(outputPart.Position.Y)
     end
     local timeInfo = timeText and (" | Zeit übrig: " .. timeText) or ""
-    -- Immer als erfolgreich markieren
     print(("✅ 'man-egg': Luck %s%s%s"):format(luck or "n/A", timeInfo, yInfo))
 else
     print("ℹ️ Kein 'man-egg' gefunden.")
 end
 
--- ► 3) Suche übrige Eggs aus eggNames
 local candidates = {}
 for _, eggFolder in ipairs(rifts:GetChildren()) do
     if eggFolder.Name ~= "man-egg" and table.find(eggNames, eggFolder.Name) then
@@ -108,7 +97,6 @@ if #candidates == 0 then
     return
 end
 
--- ► 4) Bestes Egg nach Luck finden
 local bestEgg, bestLuck, bestTime
 for _, ef in ipairs(candidates) do
     local luck, timeText = getEggStats(ef)
@@ -123,14 +111,12 @@ if not bestEgg then
     return
 end
 
--- ► 5) Y-Position des besten Eggs
 local yInfo = ""
 local outputPart = bestEgg:FindFirstChild("Output")
 if outputPart and outputPart:IsA("BasePart") then
     yInfo = (" | Y=%.2f"):format(outputPart.Position.Y)
 end
 
--- ► 6) Ausgabe für das beste Egg
 local ok = bestLuck >= requiredLuck
 local icon = ok and "✅" or "❌"
 local comp = ok and "≥" or "<"
