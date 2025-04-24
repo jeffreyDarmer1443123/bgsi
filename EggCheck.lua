@@ -9,6 +9,7 @@ local eggNames = {
     "void-Egg",
     "rainbow-Egg",
     "easter3-Egg",
+    "man-egg",
     -- weitere Namen hier ergänzen ...
 }
 
