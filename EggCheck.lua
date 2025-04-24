@@ -8,6 +8,7 @@ local requiredLuck = 25
 local eggNames = {
     "void-Egg",
     "rainbow-Egg",
+    "easter3-Egg",
     -- weitere Namen hier ergänzen ...
 }
 
