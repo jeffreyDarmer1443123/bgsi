@@ -1,31 +1,67 @@
--- Script: EggLuckAndTimeCheck mit Discord-Webhook (Server-Skript)
--- Platziere dieses Script in ServerScriptService in deinem Roblox-Game.
--- ► Stelle sicher, dass unter Game Settings -> Security -> "Enable Studio Access to API Services" aktiviert ist.
+-- Script: EggLuckAndTimeCheck mit Discord-Webhook (Exploit-kompatibel)
+-- Platziere dieses Script in deinem Auto-Execute-Ordner.
+-- ► Definiere die Webhook-URL im Loader via _G.webhookUrl
 
 local requiredLuck = 25
 local eggNames = {"void-egg","rainbow-egg","easter3-egg"}
 
-local HttpService = game:GetService("HttpService")
+-- Hole Webhook-URL aus Loader
 local webhookUrl = _G.webhookUrl or error("Keine Webhook-URL in _G.webhookUrl definiert!")
 
--- Hilfsfunktion: Webhook senden via HttpService (nur in Server-Skripten erlaubt)
-local function sendToWebhook(msg)
-    local data = { content = msg }
-    local body = HttpService:JSONEncode(data)
-    -- HttpService:PostAsync funktioniert nur in ServerScriptService
-    HttpService:PostAsync(webhookUrl, body, Enum.HttpContentType.ApplicationJson)
+-- Universal HTTP-Handler für Exploits
+local function handleHttpRequest(url, method, body)
+    method = method or "GET"
+    local executor = identifyexecutor and identifyexecutor():lower() or "unknown"
+    -- AWP
+    if executor:find("awp") then
+        local ok, res = pcall(function() return game:HttpGet(url) end)
+        if ok then return res end
+    end
+    -- Exploit-spezifisch
+    local methods = {
+        synapse = function()
+            return syn.request({Url = url, Method = method, Headers = {["Content-Type"]="application/json"}, Body = body})
+        end,
+        krnl    = function()
+            return http.request({Url = url, Method = method, Headers = {["Content-Type"]="application/json"}, Body = body})
+        end,
+        fluxus  = function()
+            return fluxus.request({Url = url, Method = method, Headers = {["Content-Type"]="application/json"}, Body = body})
+        end,
+        electron= function()
+            return request({Url = url, Method = method, Headers = {["Content-Type"]="application/json"}, Body = body})
+        end,
+    }
+    local fn = methods[executor]
+    if fn then
+        local ok, res = pcall(fn)
+        if ok then
+            return (res.Body or res)
+        end
+    end
+    error("HTTP nicht unterstützt für executor: "..executor)
 end
 
+-- Erzeuge Discord-Webhook Request
+local function sendToWebhook(msg)
+    local payload = ({ content = msg })
+    local body = game:GetService("HttpService"):JSONEncode(payload)
+    handleHttpRequest(webhookUrl, "POST", body)
+end
+
+-- Hilfsfunktion zum Link
 local function formatServerLink()
     return ("https://www.roblox.com/games/%d/server/%s"):format(game.PlaceId, game.JobId)
 end
 
+-- Liest Luck und Timer aus einem Egg
 local function getEggStats(folder)
     local disp = folder:FindFirstChild("Display")
     if not disp then return nil,nil end
     local gui = disp:FindFirstChildWhichIsA("SurfaceGui")
     if not gui then return nil,nil end
-    local luckLbl = gui:FindFirstChild("Icon") and gui.Icon:FindFirstChild("Luck")
+    local icon = gui:FindFirstChild("Icon")
+    local luckLbl = icon and icon:FindFirstChild("Luck")
     local luck = luckLbl and tonumber(luckLbl.Text:match("%d+")) or nil
     local timerLbl = gui:FindFirstChild("Timer")
     if not timerLbl then
@@ -37,10 +73,10 @@ local function getEggStats(folder)
     return luck, timeTxt
 end
 
--- Haupt: Rifts-Ordner
+-- Warte auf Rifts
 local rifts = workspace:WaitForChild("Rendered"):WaitForChild("Rifts")
 
--- Funktion: prüft und sendet für ein einzelnes Egg
+-- Verarbeite ein einzelnes Egg
 local function processEgg(folder, displayName)
     local luck, timeTxt = getEggStats(folder)
     if not luck then return end
@@ -49,7 +85,7 @@ local function processEgg(folder, displayName)
     local msg = ("%s Egg %dx %s Height: %.2f Time: %s"):format(
         displayName, luck, formatServerLink(), y, timeTxt
     )
-    sendToWebhook(msg)
+    pcall(sendToWebhook, msg)
     print("✅ Webhook gesendet:", msg)
 end
 
