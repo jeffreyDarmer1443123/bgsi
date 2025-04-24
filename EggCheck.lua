@@ -11,6 +11,8 @@ local eggNames = {
     -- weitere Namen hier ergänzen ...
 }
 
+local webhookUrl = _G.webhookUrl
+
 -- ► Funktion: Liest Luck-Wert und verbleibende Zeit eines Egg-Folders
 local function getEggStats(eggFolder)
     local display = eggFolder:FindFirstChild("Display")
