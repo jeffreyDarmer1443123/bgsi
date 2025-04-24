@@ -1,6 +1,7 @@
--- Script: EggLuckAndTimeCheck
+-- Script: EggLuckAndTimeCheck mit Discord-Webhook
 -- Platziere dieses Script z.B. in ServerScriptService.
--- ► Nur hier anpassen:
+-- ► Du brauchst hier NICHT mehr die Webhook-URL anpassen
+
 local requiredLuck = 25
 
 -- Liste mit allen gewünschten Egg-Namen (ohne man-egg)
@@ -11,22 +12,26 @@ local eggNames = {
     -- weitere Namen hier ergänzen ...
 }
 
--- ► Funktion: Liest Luck-Wert und verbleibende Zeit eines Egg-Folders
+-- Services
+local HttpService = game:GetService("HttpService")
+
+-- Hole die Webhook-URL aus dem Loader
+local webhookUrl = _G.webhookUrl or error("Keine Webhook-URL in _G.webhookUrl definiert!")
+
+-- Funktion: Liest Luck-Wert und verbleibende Zeit eines Egg-Folders
 local function getEggStats(eggFolder)
     local display = eggFolder:FindFirstChild("Display")
     if not (display and display:FindFirstChildWhichIsA("SurfaceGui")) then
         return nil, nil
     end
     local surfaceGui = display:FindFirstChildWhichIsA("SurfaceGui")
-
     local icon = surfaceGui:FindFirstChild("Icon")
     if not icon then return nil, nil end
-
     local luckLabel = icon:FindFirstChild("Luck")
     if not (luckLabel and luckLabel:IsA("TextLabel")) then
         return nil, nil
     end
-    local digits    = luckLabel.Text:match("%d+")
+    local digits = luckLabel.Text:match("%d+")
     local luckValue = digits and tonumber(digits) or nil
 
     local timerLabel = surfaceGui:FindFirstChild("Timer")
@@ -44,28 +49,34 @@ local function getEggStats(eggFolder)
 end
 
 -- ► 1) Zugriff auf Rifts-Ordner
-local rifts = workspace:FindFirstChild("Rendered")
-            and workspace.Rendered:FindFirstChild("Rifts")
+local rifts = workspace:FindFirstChild("Rendered") and workspace.Rendered:FindFirstChild("Rifts")
 if not rifts then
     error("Ordner Workspace.Rendered.Rifts nicht gefunden.")
 end
 
--- ► 2) Man-Egg immer ausgeben, falls vorhanden
+-- ► 2) Man-Egg ("aura") prüfen und Webhook senden
 local manEgg = rifts:FindFirstChild("aura")
 if manEgg then
     local luck, timeText = getEggStats(manEgg)
-    local yInfo = ""
-    local outputPart = manEgg:FindFirstChild("Output")
-    if outputPart and outputPart:IsA("BasePart") then
-        yInfo = (" | Y=%.2f"):format(outputPart.Position.Y)
-    end
-    local timeInfo = timeText and (" | Zeit übrig: " .. timeText) or ""
-    -- Immer als erfolgreich markieren
-    print(("✅ 'aura-egg': Luck %s%s%s")
-        :format(luck or "n/A", timeInfo, yInfo)
-    )
+    local outputPart    = manEgg:FindFirstChild("Output")
+    local posY          = (outputPart and outputPart:IsA("BasePart")) and outputPart.Position.Y or 0
+
+    -- Server-Link
+    local placeId    = game.PlaceId
+    local serverId   = game.JobId
+    local serverLink = ("https://www.roblox.com/games/%d/server/%s"):format(placeId, serverId)
+
+    -- Nachricht formatieren
+    local msg = ("Aura Egg %dx %s Height: %.2f Time: %s")
+        :format(luck or 0, serverLink, posY, timeText or "n/A")
+
+    -- Webhook senden
+    local payload = HttpService:JSONEncode({ content = msg })
+    HttpService:PostAsync(webhookUrl, payload, Enum.HttpContentType.ApplicationJson)
+
+    print("✅ Aura-Egg gefunden und Webhook gesendet:", msg)
 else
-    warn("ℹ️ Kein 'man-egg' gefunden.")
+    warn("ℹ️ Kein 'aura' (Man-Egg) gefunden.")
 end
 
 -- ► 3) Suche übrige Eggs aus eggNames
@@ -75,11 +86,8 @@ for _, eggFolder in ipairs(rifts:GetChildren()) do
         table.insert(candidates, eggFolder)
     end
 end
-
 if #candidates == 0 then
-    error(("❌ Kein Egg mit den Namen %s gefunden.")
-        :format(table.concat(eggNames, ", "))
-    )
+    error(("❌ Kein Egg mit den Namen %s gefunden."):format(table.concat(eggNames, ", ")))
     return
 end
 
@@ -93,19 +101,15 @@ for _, ef in ipairs(candidates) do
         bestTime = timeText
     end
 end
-
 if not bestEgg then
-    error(("❌ Luck-Wert für Eggs %s konnte nicht ermittelt werden.")
-        :format(table.concat(eggNames, ", "))
-    )
+    error(("❌ Luck-Wert für Eggs %s konnte nicht ermittelt werden."):format(table.concat(eggNames, ", ")))
     return
 end
 
 -- ► 5) Y-Position des besten Eggs
-local yInfo = ""
-local outputPart = bestEgg:FindFirstChild("Output")
-if outputPart and outputPart:IsA("BasePart") then
-    yInfo = (" | Y=%.2f"):format(outputPart.Position.Y)
+local outP, yVal = bestEgg:FindFirstChild("Output"), 0
+if outP and outP:IsA("BasePart") then
+    yVal = outP.Position.Y
 end
 
 -- ► 6) Ausgabe für das beste Egg
@@ -113,8 +117,9 @@ local ok       = bestLuck >= requiredLuck
 local icon     = ok and "✅" or "❌"
 local comp     = ok and "≥" or "<"
 local timeInfo = bestTime and (" | Zeit übrig: " .. bestTime) or ""
-local message  = ("%s '%s': Luck %d %s %d%s%s")
-    :format(icon, bestEgg.Name, bestLuck, comp, requiredLuck, timeInfo, yInfo)
+local message  = ("%s '%s': Luck %d %s %d%s | Height: %.2f"):format(
+    icon, bestEgg.Name, bestLuck, comp, requiredLuck, timeInfo, yVal
+)
 
 if ok then
     print(message)
