@@ -53,7 +53,7 @@ if not rifts then
 end
 
 -- ► 2) Man-Egg immer ausgeben, falls vorhanden
-local manEgg = rifts:FindFirstChild("aura")
+local manEgg = rifts:FindFirstChild("man-egg")
 if manEgg then
     local luck, timeText = getEggStats(manEgg)
     local yInfo = ""
