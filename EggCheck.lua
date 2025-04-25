@@ -111,7 +111,7 @@ else
     end
 
     if #candidates == 0 then
-        warn(("❌ Kein passendes Egg gefunden (%s) mit >=5 Minuten Zeit."):format(table.concat(eggNames, ", ")))
+        warn(("❌ Kein passendes Egg gefunden (%s) mit >=", minTime, "Minuten Zeit."):format(table.concat(eggNames, ", ")))
         shared.eggCheckFinished = true
         return
     end
