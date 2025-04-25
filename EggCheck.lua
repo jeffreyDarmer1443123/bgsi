@@ -126,14 +126,18 @@ local message = ("%s '%s': Luck %d %s %d%s%s")
     :format(icon, bestEgg.Name, bestLuck, comp, requiredLuck, timeInfo, yInfo)
 if ok then
     print(message)
+    print("📡 DEBUG: Sende Webhook jetzt...")
+
     sendWebhookEmbed(
-    bestEgg.Name,
-    bestLuck,
-    bestTime,
-    outputPart and outputPart.Position.Y or 0,
-    game.JobId,
-    game.PlaceId
-)
+        bestEgg.Name,
+        bestLuck,
+        bestTime,
+        outputPart and outputPart.Position.Y or 0,
+        game.JobId,
+        game.PlaceId
+    )
+
+    print("✅ DEBUG: sendWebhookEmbed wurde aufgerufen.")
 else
     error(message)
 end
