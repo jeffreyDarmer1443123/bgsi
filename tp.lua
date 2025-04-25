@@ -1,6 +1,8 @@
 -- ✅ ServerHopper v5 – Anti-Crash Edition für AWP, KRNL, Synapse, Fluxus
 -- Features: LocalPlayer-Teleport, Fallback, HTTP-Toleranz, Debuglog
 
+wait(2)
+
 local Players = game:GetService("Players")
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
