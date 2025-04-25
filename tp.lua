@@ -13,7 +13,7 @@ local CurrentServerId = game.JobId
 
 local Config = {
     MinPlayers         = 2,   -- Mindestanzahl an Spielern im Zielserver
-    RequiredFreeSlots  = 2,   -- Mindestanzahl an freien Plätzen
+    RequiredFreeSlots  = 8,   -- Mindestanzahl an freien Plätzen
     MaxRetries         = 5,   -- Max. Wiederholungen bei Fehlschlägen
     RetryDelay         = 5,   -- Zeit zwischen Versuchen (Sekunden)
     RateLimitThreshold = 3    -- Max. erlaubte HTTP-Fehler
