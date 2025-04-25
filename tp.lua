@@ -59,8 +59,8 @@ local function fetchServers()
 
     if data.errors then
         -- Rate-Limit erkannt
-        warn("[ServerHop] Rate-Limit: Warte 10 Sekunden bevor nächster Versuch")
-        task.wait(10)
+        warn("[ServerHop] Rate-Limit: Warte 5 Sekunden bevor nächster Versuch")
+        task.wait(5)
         return nil
     end
 
