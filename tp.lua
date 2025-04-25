@@ -1,8 +1,6 @@
 --==================================================================
--- tp.lua – Einmaliger, zuverlässiger Server-Hop
--- • Immer in einen anderen öffentlichen, freien Server (kein HTTP-Loop)
--- • Exkludiert die aktuelle Instanz
--- • Fallback: Kick & Teleport bei Fehlern
+-- tp.lua – Einmaliger, zuverlässiger Server-Hop (Client/Executor-kompatibel)
+-- • Läuft komplett im LocalScript/Executor (Synapse, KRNL, Fluxus, AWP u.a.)
 --==================================================================
 
 local TeleportService = game:GetService("TeleportService")
@@ -17,9 +15,7 @@ local CurrentJobId    = game.JobId
 --==================================================================
 TeleportService.TeleportInitFailed:Connect(function(errCode, errMsg)
     warn("[ServerHop] TeleportInitFailed:", errCode, errMsg, "→ Kick & Rejoin")
-    pcall(function()
-        Players.LocalPlayer:Kick("Auto-Rejoin…")
-    end)
+    pcall(function() Players.LocalPlayer:Kick("Auto-Rejoin…") end)
     task.wait(1)
     TeleportService:Teleport(PlaceID)
 end)
@@ -29,15 +25,18 @@ end)
 --==================================================================
 local function httpGet(url)
     if syn and syn.request then
-        return syn.request({ Url = url, Method = "GET" }).Body
+        return syn.request({Url = url, Method = "GET"}).Body
     elseif http_request then
-        return http_request({ Url = url, Method = "GET" }).Body
+        return http_request({Url = url, Method = "GET"}).Body
     elseif request then
-        return request({ Url = url, Method = "GET" }).Body
+        return request({Url = url, Method = "GET"}).Body
     else
         return game:HttpGet(url)
     end
 end
+
+-- Alias: safeHttpGet nutzt httpGet
+local safeHttpGet = httpGet
 
 --==================================================================
 -- 3) Versucht, eine Seite der Public-Server-API zu laden und zu parsen
@@ -58,7 +57,7 @@ local function fetchServers()
     end
 
     if data.errors then
-        -- rate-limit erkannt
+        -- Rate-Limit erkannt
         warn("[ServerHop] Rate-Limit: Warte 10 Sekunden bevor nächster Versuch")
         task.wait(10)
         return nil
@@ -66,7 +65,6 @@ local function fetchServers()
 
     return data.data
 end
-
 
 --==================================================================
 -- 4) Wähle eine zufällige, andere Instanz aus der Liste
@@ -86,9 +84,7 @@ if servers then
         local ok = pcall(function()
             TeleportService:TeleportToPlaceInstance(PlaceID, targetId)
         end)
-        if ok then
-            return  -- alles gut, wir sind weg
-        end
+        if ok then return end  -- erfolgreich, Script ist weg
         warn("[ServerHop] TeleportToPlaceInstance fehlgeschlagen, fallback Kick+Teleport")
     else
         warn("[ServerHop] Kein freier Public-Server gefunden")
@@ -101,8 +97,6 @@ end
 -- 5) Fallback: Kick & Teleport, garantiert neuer Server
 --==================================================================
 warn("[ServerHop] Fallback: Kick & Teleport")
-pcall(function()
-    Players.LocalPlayer:Kick("Auto-Rejoin…")
-end)
+pcall(function() Players.LocalPlayer:Kick("Auto-Rejoin…") end)
 task.wait(1)
 TeleportService:Teleport(PlaceID)
