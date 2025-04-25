@@ -1,15 +1,14 @@
-wait(4)
 --==================================================================
 -- tp.lua – Einmaliger, zuverlässiger Server-Hop (Client/Executor-kompatibel)
--- • Läuft komplett im LocalScript/Executor (Synapse, KRNL, Fluxus, AWP u.a.)
+-- Läuft komplett im LocalScript/Executor (Synapse, KRNL, Fluxus, AWP u.a.)
 --==================================================================
 
 local TeleportService = game:GetService("TeleportService")
 local HttpService     = game:GetService("HttpService")
 local Players         = game:GetService("Players")
 
-local PlaceID         = game.PlaceId
-local CurrentJobId    = game.JobId
+local PlaceID      = game.PlaceId
+local CurrentJobId = game.JobId
 
 --==================================================================
 -- 1) TeleportInitFailed-Handler: Kick & Rejoin, falls Teleport blockiert
@@ -36,7 +35,6 @@ local function httpGet(url)
     end
 end
 
--- Alias: safeHttpGet nutzt httpGet
 local safeHttpGet = httpGet
 
 --==================================================================
@@ -58,9 +56,8 @@ local function fetchServers()
     end
 
     if data.errors then
-        -- Rate-Limit erkannt
-        warn("[ServerHop] Rate-Limit: Warte 5 Sekunden bevor nächster Versuch")
-        task.wait(5)
+        warn("[ServerHop] Rate-Limit erkannt: Warte 10 Sekunden")
+        task.wait(10)
         return nil
     end
 
@@ -68,25 +65,37 @@ local function fetchServers()
 end
 
 --==================================================================
--- 4) Wähle eine zufällige, andere Instanz aus der Liste
+-- 4) Wähle eine zufällige, andere Instanz aus der Liste und teleportiere
 --==================================================================
 task.wait(0.5)  -- kurz warten, damit TeleportService bereit ist
 local servers = fetchServers()
 if servers then
     local valid = {}
     for _, srv in ipairs(servers) do
-        if srv.id ~= CurrentJobId and srv.playing < srv.maxPlayers then
+        if srv.id ~= CurrentJobId and (srv.maxPlayers - srv.playing) > 0 then
             table.insert(valid, srv.id)
         end
     end
     if #valid > 0 then
         local targetId = valid[math.random(#valid)]
-        warn("[ServerHop] TeleportToPlaceInstance →", targetId)
-        local ok = pcall(function()
+        warn("[ServerHop] Versuche TeleportToPlaceInstance →", targetId)
+
+        local ok, err = pcall(function()
+            -- TeleportToPlaceInstance ist oft server-only; kann client-seitig no-op sein
             TeleportService:TeleportToPlaceInstance(PlaceID, targetId)
         end)
-        if ok then return end  -- erfolgreich, Script ist weg
-        warn("[ServerHop] TeleportToPlaceInstance fehlgeschlagen, fallback Kick+Teleport")
+
+        -- Fallback-Mechanismus: Wenn nach 5 Sekunden kein Serverwechsel passiert, kicken/teleporten
+        task.delay(5, function()
+            if game.JobId == CurrentJobId then
+                warn("[ServerHop] TeleportToPlaceInstance offenbar fehlgeschlagen, Kick & Teleport")
+                pcall(function() Players.LocalPlayer:Kick("Auto-Rejoin…") end)
+                task.wait(1)
+                TeleportService:Teleport(PlaceID)
+            end
+        end)
+
+        return
     else
         warn("[ServerHop] Kein freier Public-Server gefunden")
     end
