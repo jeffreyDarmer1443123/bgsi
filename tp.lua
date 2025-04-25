@@ -152,15 +152,17 @@ for attempt = 1, math.min(5, #validServers) do
         local ok, err = pcall(TeleportService.TeleportToPlaceInstance, TeleportService, placeId, targetJobId, player)
         if ok then
             print("Joining", targetJobId)
+            wait(5) -- <<< GIB ZEIT ZUM TELEPORTIEREN!!!
             local newcurrentJobId = game.JobId
             if newcurrentJobId ~= currentJobId then
                 teleported = true
-                break  -- Teleport erfolgreich initiiert; Schleife verlassen
+                break  -- Erfolgreich, raus aus der Schleife
+            else
+                warn("Serverwechsel fehlgeschlagen, gleicher Server. Versuche nächsten Server...")
             end
         else
-            -- Teleport fehlgeschlagen, Fehler abfangen und melden
-            warn("Server-Hop", "Teleport fehlgeschlagen (Versuch "..attempt.." von 5)", 5)
-            wait(1)  -- kurze Wartezeit vor dem nächsten Versuch
+            warn("Teleport Fehler (Versuch "..attempt.." von 5):", err)
+            wait(1)
         end
     end
 end
