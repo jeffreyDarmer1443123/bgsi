@@ -1,105 +1,172 @@
-wait(3)
---==================================================================
--- tp.lua – Einmaliger, zuverlässiger Server-Hop (Client/Executor-kompatibel)
---==================================================================
+--// Services und Variablen initialisieren
+local HttpService = game:GetService("HttpService")             -- Dienst für JSON-Verarbeitung
+local TeleportService = game:GetService("TeleportService")     -- Dienst zum Teleportieren zwischen Servern
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer                             -- Der lokale Spieler, der teleportiert wird
 
--- Services & Variablen
-local TeleportService = game:GetService("TeleportService")
-local HttpService     = game:GetService("HttpService")
-local Players         = game:GetService("Players")
-local PlaceID         = game.PlaceId
-local CurrentJobId    = game.JobId
+--// Konfiguration
+local placeId = game.PlaceId   -- ID des aktuellen Spiels (Place)
+local currentJobId = game.JobId   -- Server-ID des aktuellen Servers (zum Vergleich, um nicht denselben zu wählen)
+local serverListUrl = string.format(
+    "https://games.roblox.com/v1/games/%d/servers/Public?excludeFullGames=true&limit=100",
+    placeId
+)
+-- Hinweis: 'excludeFullGames=true' bewirkt, dass volle Server von der API gar nicht erst zurückgegeben werden&#8203;:contentReference[oaicite:9]{index=9}.
+-- Sortierung (Asc/Desc) kann bei Bedarf hinzugefügt werden. Standard ist Asc (aufsteigend).
 
---==================================================================
--- 1) TeleportInitFailed-Handler: Einmaliger Kick & Rejoin
---==================================================================
-local teleportFailedHandled = false
-TeleportService.TeleportInitFailed:Connect(function(errCode, errMsg)
-    if teleportFailedHandled then return end
-    teleportFailedHandled = true
-    warn("[ServerHop] TeleportInitFailed:", errCode, errMsg, "→ Kick & Rejoin")
-    pcall(function() Players.LocalPlayer:Kick("Auto-Rejoin…") end)
-    task.wait(1)
-    TeleportService:Teleport(PlaceID)
-end)
+--// Cache-Einstellungen
+local cacheFile = "awp_servercache.txt"
+local cacheMaxAge = 120  -- max. 120 Sekunden (2 Minuten) Cache-Gültigkeit
 
---==================================================================
--- 2) Universelle HTTP-GET-Funktion für Exploit-Clients
---==================================================================
-local function httpGet(url)
-    if syn and syn.request then
-        return syn.request({Url = url, Method = "GET"}).Body
-    elseif http_request then
-        return http_request({Url = url, Method = "GET"}).Body
-    elseif request then
-        return request({Url = url, Method = "GET"}).Body
+--// Hilfsfunktionen für Notifications (Benachrichtigungen)
+local function notify(title, text, duration)
+    -- Zeigt eine einfache Benachrichtigung am Bildschirmrand an&#8203;:contentReference[oaicite:10]{index=10}.
+    pcall(function()
+        game.StarterGui:SetCore("SendNotification", {
+            Title = title or "Hinweis",
+            Text = text or "",
+            Duration = duration or 5
+        })
+    end)
+end
+
+--// Schritt 1: Versuche, Serverliste aus Cache zu laden (falls vorhanden und frisch)
+local serverData   -- Variable für die Serverliste (Tabelle mit Serverinformationen)
+local useCache = false
+if typeof(isfile) == "function" and isfile(cacheFile) then
+    -- Datei existiert, versuche zu lesen
+    local cacheContent
+    local success, err = pcall(function()
+        cacheContent = readfile(cacheFile)
+    end)
+    if success and cacheContent then
+        -- Versuche, JSON zu parsen
+        local success2, cacheTable = pcall(HttpService.JSONDecode, HttpService, cacheContent)
+        if success2 and type(cacheTable) == "table" and cacheTable.timestamp and cacheTable.data then
+            local age = os.time() - tonumber(cacheTable.timestamp)
+            if age < cacheMaxAge then
+                -- Cache ist jünger als 2 Minuten, wir verwenden diese Daten
+                serverData = cacheTable.data
+                useCache = true
+            else
+                -- Cache ist zu alt
+                -- (Kein Fehler, wir holen gleich frische Daten. Kein Notify nötig.)
+            end
+        else
+            -- Cache-Datei ist korrupt oder kein gültiges JSON
+            notify("Server-Hop", "Cache-Daten ungültig, lade Serverliste neu...", 5)
+        end
     else
-        return game:HttpGet(url)
+        -- Lesen schlug fehl (z.B. Berechtigung oder unerwarteter Fehler)
+        notify("Server-Hop", "Cache konnte nicht gelesen werden, lade neu...", 5)
     end
 end
-local safeHttpGet = httpGet
 
---==================================================================
--- 3) Abrufen und Parsen der Public-Server-Liste
---==================================================================
-local function fetchServers()
-    local raw = safeHttpGet(("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100"):format(PlaceID))
-    if not raw then
-        warn("[ServerHop] HTTP-Fehler oder Rate-Limit")
-        return nil
+--// Schritt 2: Falls kein gültiger Cache genutzt wird, Serverliste per HTTP von Roblox-API abrufen
+if not serverData then
+    local httpSuccess = false
+    local httpResponse
+    for attempt = 1, 5 do
+        local ok, result = pcall(game.HttpGet, game, serverListUrl)
+        if ok and result then
+            -- HTTP-Aufruf erfolgreich, Ergebnis (JSON-Text) liegt in 'result'
+            -- Versuche JSON zu dekodieren
+            local ok2, data = pcall(HttpService.JSONDecode, HttpService, result)
+            if ok2 and type(data)=="table" and data.data then
+                serverData = data.data  -- 'data.data' enthält die Serverliste (Array)
+                httpSuccess = true
+                -- Im Erfolgsfall die Schleife abbrechen
+                break
+            else
+                -- JSON-Parse-Fehler (z.B. API hat ungültige Antwort geliefert)
+                notify("Server-Hop", "Fehler: Serverliste unverständlich (Versuch "..attempt.." von 5)", 5)
+            end
+        else
+            -- HTTP-Fehler (Kein Zugriff oder Timeout etc.)
+            notify("Server-Hop", "Fehler: Konnte Serverliste nicht abrufen (Versuch "..attempt.." von 5)", 5)
+        end
+        wait(1)  -- kurze Pause vor nächstem Versuch (1 Sekunde)
     end
-    local ok, data = pcall(HttpService.JSONDecode, HttpService, raw)
-    if not ok then
-        warn("[ServerHop] JSON-Parsing fehlgeschlagen, raw:\n", raw)
-        return nil
+    if not httpSuccess then
+        -- Nach 5 Fehlversuchen beim Abruf -> Abbruch
+        notify("Server-Hop", "Abbruch: Serverliste konnte nicht geladen werden.", 5)
+        return  -- Skript endet hier ohne Teleport
     end
-    if data.errors then
-        warn("[ServerHop] Rate-Limit erkannt: Warte 10 Sekunden")
-        task.wait(10)
-        return nil
-    end
-    return data.data
-end
 
---==================================================================
--- 4) Suche & Teleportiere zu anderem Server
---==================================================================
-task.wait(0.5)
-local servers = fetchServers()
-if servers then
-    local valid = {}
-    for _, srv in ipairs(servers) do
-        if srv.id ~= CurrentJobId and (srv.maxPlayers - srv.playing) > 0 then
-            table.insert(valid, srv.id)
+    -- Erfolgreich neue Serverliste erhalten, speichere in Cache-Datei
+    if typeof(writefile) == "function" then
+        local success, err = pcall(function()
+            local cacheTable = {
+                timestamp = os.time(),
+                data = serverData
+            }
+            local jsonStr = HttpService:JSONEncode(cacheTable)
+            writefile(cacheFile, jsonStr)
+        end)
+        if not success then
+            -- Fehler beim Schreiben des Caches (nicht kritisch, nur Hinweis)
+            notify("Server-Hop", "Warnung: Konnte Serverliste nicht cachen.", 5)
         end
     end
-    if #valid > 0 then
-        local targetId = valid[math.random(#valid)]
-        warn("[ServerHop] Versuche TeleportToPlaceInstance →", targetId)
-        local ok = pcall(function()
-            TeleportService:TeleportToPlaceInstance(PlaceID, targetId)
-        end)
-        -- Fallback nach 5s, falls JobId unverändert
-        task.delay(5, function()
-            if game.JobId == CurrentJobId then
-                warn("[ServerHop] Teleport fehlgeschlagen, Kick+Rejoin")
-                pcall(function() Players.LocalPlayer:Kick("Auto-Rejoin…") end)
-                task.wait(1)
-                TeleportService:Teleport(PlaceID)
-            end
-        end)
-        return
-    else
-        warn("[ServerHop] Kein freier Public-Server gefunden")
-    end
-else
-    warn("[ServerHop] fetchServers() fehlgeschlagen")
 end
 
---==================================================================
--- 5) Fallback: Kick & Teleport
---==================================================================
-warn("[ServerHop] Fallback: Kick & Teleport")
-pcall(function() Players.LocalPlayer:Kick("Auto-Rejoin…") end)
-task.wait(1)
-TeleportService:Teleport(PlaceID)
+--// Schritt 3: Serverliste filtern und geeigneten Server auswählen
+-- Falls API zusätzliche Seiten hatte, könnten weitere Anfragen nötig sein. In diesem Skript betrachten wir die erste erhaltene Seite.
+local validServers = {}
+if type(serverData) == "table" then
+    for _, server in ipairs(serverData) do
+        -- Prüfe, ob Server gültig (nicht voll, kein VIP, nicht aktueller Server)
+        local playing = server.playing or 0
+        local maxPlayers = server.maxPlayers or 0
+        local isVIP = server.vipServerId ~= nil and server.vipServerId ~= "" and server.vipServerId ~= 0
+        if (maxPlayers == 0 or playing < maxPlayers)  -- nicht voll besetzt
+           and not isVIP                              -- kein VIP/Privatserver
+           and server.id ~= currentJobId              -- nicht der aktuelle Server
+        then
+            table.insert(validServers, server.id)
+        end
+    end
+end
+
+if #validServers == 0 then
+    -- Keine passenden Server gefunden
+    notify("Server-Hop", "Kein anderer Server verfügbar. Abbruch.", 5)
+    return  -- es gibt keinen Zielserver zum Teleportieren
+end
+
+-- Optional: Serverliste mischen, um bei wiederholter Nutzung nicht immer denselben Server zu nehmen
+math.randomseed(tick() * 1000)
+for i = #validServers, 2, -1 do
+    local j = math.random(1, i)
+    validServers[i], validServers[j] = validServers[j], validServers[i]
+end
+-- Jetzt ist validServers in zufälliger Reihenfolge
+
+--// Schritt 4: Teleportation - Versuche bis zu 5-mal, einen Server zu teleportieren
+local teleported = false
+for attempt = 1, math.min(5, #validServers) do
+    local targetJobId = validServers[attempt]
+    if targetJobId then
+        -- Versuche Teleport zum Server mit der ID targetJobId
+        local ok, err = pcall(TeleportService.TeleportToPlaceInstance, TeleportService, placeId, targetJobId, player)
+        if ok then
+            teleported = true
+            break  -- Teleport erfolgreich initiiert; Schleife verlassen
+        else
+            -- Teleport fehlgeschlagen, Fehler abfangen und melden
+            notify("Server-Hop", "Teleport fehlgeschlagen (Versuch "..attempt.." von 5)", 5)
+            wait(1)  -- kurze Wartezeit vor dem nächsten Versuch
+        end
+    end
+end
+
+--// Schritt 5: Ergebnis prüfen und ggf. Abbruchmeldung
+if not teleported then
+    if #validServers >= 5 then
+        -- 5 Versuche wurden unternommen (weil mindestens 5 Server zur Verfügung standen)
+        notify("Server-Hop", "Serverwechsel abgebrochen nach 5 Fehlversuchen.", 5)
+    else
+        -- Weniger als 5 mögliche Server insgesamt und alle fehlgeschlagen
+        notify("Server-Hop", "Serverwechsel abgebrochen - kein erfolgreicher Wechsel möglich.", 5)
+    end
+end
