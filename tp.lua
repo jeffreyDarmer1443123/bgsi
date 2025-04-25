@@ -1,5 +1,5 @@
 -- ✅ ServerHopper v6.1 – mit echtem Serverwechsel, Cursor + Fallback
-
+wait(3)
 local Players = game:GetService("Players")
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
