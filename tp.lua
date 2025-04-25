@@ -17,7 +17,7 @@ local serverListUrl = string.format(
 
 --// Cache-Einstellungen
 local cacheFile = "awp_servercache.txt"
-local cacheMaxAge = 120  -- max. 120 Sekunden (2 Minuten) Cache-Gültigkeit
+local cacheMaxAge = 30  -- max. 120 Sekunden (2 Minuten) Cache-Gültigkeit
 
 --// Hilfsfunktionen für Notifications (Benachrichtigungen)
 local function notify(title, text, duration)
