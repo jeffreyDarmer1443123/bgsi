@@ -4,6 +4,7 @@
 local requiredLuck = shared.requiredLuck or error("❌ Kein Luck in shared.requiredLuck definiert!")
 local eggNames = shared.eggNames or error("❌ Keine EggNames in shared.eggNames definiert!")
 local webhookUrl = shared.webhookUrl or error("❌ Keine Webhook-URL in shared.webhookUrl definiert!")
+local minTime = shared.minTime
 
 -- Hilfsfunktion: Sende Discord-Webhook
 local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
