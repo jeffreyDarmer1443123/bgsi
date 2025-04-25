@@ -1,10 +1,6 @@
-local requiredLuck = 25
+local requiredLuck = requiredLuck or error("Kein Luck in requiredLuck definiert!")
 
-local eggNames = {
-    "void-egg",
-    "rainbow-egg",
-    "easter3-egg",
-}
+local eggNames = shared.eggNames or error("Keine EggNames in shared.eggNames definiert!")
 
 local webhookUrl = shared.webhookUrl or error("Keine Webhook-URL in shared.webhookUrl definiert!")
 print(webhookUrl)
