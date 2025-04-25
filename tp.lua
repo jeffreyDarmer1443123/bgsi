@@ -1,6 +1,18 @@
-wait(3)
+wait(4)
 --==================================================================
--- 1) TeleportInitFailed-Handler: Kick & Rejoin nur einmal, falls Teleport blockiert
+--==================================================================
+-- 1) TeleportInitFailed-Handler: Kick & Rejoin nur einmal, danach ignorieren
+--==================================================================
+local teleportFailedHandled = false
+TeleportService.TeleportInitFailed:Connect(function(errCode, errMsg)
+    if teleportFailedHandled then return end
+    teleportFailedHandled = true
+    warn("[ServerHop] TeleportInitFailed:", errCode, errMsg, "→ Kick & Rejoin")
+    pcall(function() Players.LocalPlayer:Kick("Auto-Rejoin…") end)
+    task.wait(1)
+    TeleportService:Teleport(PlaceID)
+end)
+
 --==================================================================
 local initFailedConn
 initFailedConn = TeleportService.TeleportInitFailed:Connect(function(errCode, errMsg)
