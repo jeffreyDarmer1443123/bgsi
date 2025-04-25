@@ -1,3 +1,4 @@
+wait(2)
 --============================================================================== 
 -- Robust Server-Hop v6 
 -- Einmaliger Wechsel in einen öffentlichen, nicht vollen Server. 
