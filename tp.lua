@@ -172,6 +172,9 @@ if not teleported then
     if #validServers >= 5 then
         -- 5 Versuche wurden unternommen (weil mindestens 5 Server zur Verfügung standen)
         warn("Server-Hop", "Serverwechsel abgebrochen nach 5 Fehlversuchen.", 5)
+        pcall(function() Players.LocalPlayer:Kick("Auto-Rejoin…") end)
+        task.wait(1)
+        TeleportService:Teleport(PlaceID)
     else
         -- Weniger als 5 mögliche Server insgesamt und alle fehlgeschlagen
         warn("Server-Hop", "Serverwechsel abgebrochen - kein erfolgreicher Wechsel möglich.", 5)
