@@ -43,24 +43,30 @@ end
 -- 3) Versucht, eine Seite der Public-Server-API zu laden und zu parsen
 --==================================================================
 local function fetchServers()
-    local url = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100"):format(PlaceID)
-    local ok, body = pcall(httpGet, url)
-    if not ok or type(body) ~= "string" then
-        warn("[ServerHop] HTTP-Request fehlgeschlagen:", tostring(body))
+    local raw = safeHttpGet(
+        ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100"):format(PlaceID)
+    )
+    if not raw then
+        warn("[ServerHop] HTTP-Fehler oder Rate-Limit")
         return nil
     end
-    -- Prüfen, ob es plausibles JSON ist
-    if not body:match("^%s*{") then
-        warn("[ServerHop] Antwort kein JSON, raw:"); warn(body)
+
+    local ok, data = pcall(HttpService.JSONDecode, HttpService, raw)
+    if not ok then
+        warn("[ServerHop] JSON-Parsing fehlgeschlagen, raw:\n", raw)
         return nil
     end
-    local success, data = pcall(HttpService.JSONDecode, HttpService, body)
-    if not success or type(data) ~= "table" or type(data.data) ~= "table" then
-        warn("[ServerHop] JSON-Parsing fehlgeschlagen, raw:"); warn(body)
+
+    if data.errors then
+        -- rate-limit erkannt
+        warn("[ServerHop] Rate-Limit: Warte 10 Sekunden bevor nächster Versuch")
+        task.wait(10)
         return nil
     end
+
     return data.data
 end
+
 
 --==================================================================
 -- 4) Wähle eine zufällige, andere Instanz aus der Liste
