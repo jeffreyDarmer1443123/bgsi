@@ -1,4 +1,4 @@
-local requiredLuck = requiredLuck or error("Kein Luck in requiredLuck definiert!")
+local requiredLuck = shared.requiredLuck or error("Kein Luck in requiredLuck definiert!")
 
 local eggNames = shared.eggNames or error("Keine EggNames in shared.eggNames definiert!")
 
