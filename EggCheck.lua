@@ -3,6 +3,7 @@ local requiredLuck = shared.requiredLuck or error("Kein Luck in requiredLuck def
 local eggNames = shared.eggNames or error("Keine EggNames in shared.eggNames definiert!")
 
 local webhookUrl = shared.webhookUrl or error("Keine Webhook-URL in shared.webhookUrl definiert!")
+local foundEgg = shared.foundEgg
 
 local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
 	local HttpService = game:GetService("HttpService")
@@ -133,6 +134,7 @@ if ok then
     )
 
     print("✅ DEBUG: sendWebhookEmbed wurde aufgerufen.")
+    shared.foundEgg = True
 else
     error(message)
 end
