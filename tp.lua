@@ -54,11 +54,11 @@ if typeof(isfile) == "function" and isfile(cacheFile) then
             end
         else
             -- Cache-Datei ist korrupt oder kein gültiges JSON
-            notify("Server-Hop", "Cache-Daten ungültig, lade Serverliste neu...", 5)
+            warn("Server-Hop", "Cache-Daten ungültig, lade Serverliste neu...", 5)
         end
     else
         -- Lesen schlug fehl (z.B. Berechtigung oder unerwarteter Fehler)
-        notify("Server-Hop", "Cache konnte nicht gelesen werden, lade neu...", 5)
+        warn("Server-Hop", "Cache konnte nicht gelesen werden, lade neu...", 5)
     end
 end
 
@@ -79,17 +79,17 @@ if not serverData then
                 break
             else
                 -- JSON-Parse-Fehler (z.B. API hat ungültige Antwort geliefert)
-                notify("Server-Hop", "Fehler: Serverliste unverständlich (Versuch "..attempt.." von 5)", 5)
+                warn("Server-Hop", "Fehler: Serverliste unverständlich (Versuch "..attempt.." von 5)", 5)
             end
         else
             -- HTTP-Fehler (Kein Zugriff oder Timeout etc.)
-            notify("Server-Hop", "Fehler: Konnte Serverliste nicht abrufen (Versuch "..attempt.." von 5)", 5)
+            warn("Server-Hop", "Fehler: Konnte Serverliste nicht abrufen (Versuch "..attempt.." von 5)", 5)
         end
         wait(1)  -- kurze Pause vor nächstem Versuch (1 Sekunde)
     end
     if not httpSuccess then
         -- Nach 5 Fehlversuchen beim Abruf -> Abbruch
-        notify("Server-Hop", "Abbruch: Serverliste konnte nicht geladen werden.", 5)
+        warn("Server-Hop", "Abbruch: Serverliste konnte nicht geladen werden.", 5)
         return  -- Skript endet hier ohne Teleport
     end
 
@@ -105,7 +105,7 @@ if not serverData then
         end)
         if not success then
             -- Fehler beim Schreiben des Caches (nicht kritisch, nur Hinweis)
-            notify("Server-Hop", "Warnung: Konnte Serverliste nicht cachen.", 5)
+            warn("Server-Hop", "warnung: Konnte Serverliste nicht cachen.", 5)
         end
     end
 end
@@ -130,7 +130,7 @@ end
 
 if #validServers == 0 then
     -- Keine passenden Server gefunden
-    notify("Server-Hop", "Kein anderer Server verfügbar. Abbruch.", 5)
+    warn("Server-Hop", "Kein anderer Server verfügbar. Abbruch.", 5)
     return  -- es gibt keinen Zielserver zum Teleportieren
 end
 
@@ -154,7 +154,7 @@ for attempt = 1, math.min(5, #validServers) do
             break  -- Teleport erfolgreich initiiert; Schleife verlassen
         else
             -- Teleport fehlgeschlagen, Fehler abfangen und melden
-            notify("Server-Hop", "Teleport fehlgeschlagen (Versuch "..attempt.." von 5)", 5)
+            warn("Server-Hop", "Teleport fehlgeschlagen (Versuch "..attempt.." von 5)", 5)
             wait(1)  -- kurze Wartezeit vor dem nächsten Versuch
         end
     end
@@ -164,9 +164,9 @@ end
 if not teleported then
     if #validServers >= 5 then
         -- 5 Versuche wurden unternommen (weil mindestens 5 Server zur Verfügung standen)
-        notify("Server-Hop", "Serverwechsel abgebrochen nach 5 Fehlversuchen.", 5)
+        warn("Server-Hop", "Serverwechsel abgebrochen nach 5 Fehlversuchen.", 5)
     else
         -- Weniger als 5 mögliche Server insgesamt und alle fehlgeschlagen
-        notify("Server-Hop", "Serverwechsel abgebrochen - kein erfolgreicher Wechsel möglich.", 5)
+        warn("Server-Hop", "Serverwechsel abgebrochen - kein erfolgreicher Wechsel möglich.", 5)
     end
 end
