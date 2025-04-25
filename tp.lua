@@ -1,20 +1,10 @@
-wait(4)
+wait(3)
 --==================================================================
--- tp.lua – Einmaliger, zuverlässiger Server-Hop (Client/Executor-kompatibel)
--- Läuft komplett im LocalScript/Executor (Synapse, KRNL, Fluxus, AWP u.a.)
+-- 1) TeleportInitFailed-Handler: Kick & Rejoin nur einmal, falls Teleport blockiert
 --==================================================================
-
-local TeleportService = game:GetService("TeleportService")
-local HttpService     = game:GetService("HttpService")
-local Players         = game:GetService("Players")
-
-local PlaceID      = game.PlaceId
-local CurrentJobId = game.JobId
-
---==================================================================
--- 1) TeleportInitFailed-Handler: Kick & Rejoin, falls Teleport blockiert
---==================================================================
-TeleportService.TeleportInitFailed:Connect(function(errCode, errMsg)
+local initFailedConn
+initFailedConn = TeleportService.TeleportInitFailed:Connect(function(errCode, errMsg)
+    initFailedConn:Disconnect()  -- nur einmal ausführen
     warn("[ServerHop] TeleportInitFailed:", errCode, errMsg, "→ Kick & Rejoin")
     pcall(function() Players.LocalPlayer:Kick("Auto-Rejoin…") end)
     task.wait(1)
@@ -23,6 +13,7 @@ end)
 
 --==================================================================
 -- 2) Universelle HTTP-GET-Funktion für Exploit-Clients
+--==================================================================
 --==================================================================
 local function httpGet(url)
     if syn and syn.request then
@@ -68,7 +59,7 @@ end
 --==================================================================
 -- 4) Wähle eine zufällige, andere Instanz aus der Liste und teleportiere
 --==================================================================
-task.wait(1)  -- kurz warten, damit TeleportService bereit ist
+task.wait(0.5)  -- kurz warten, damit TeleportService bereit ist
 local servers = fetchServers()
 if servers then
     local valid = {}
