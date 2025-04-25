@@ -1,5 +1,5 @@
--- ✅ Zuverlässiger ServerHopper v5
--- Unterstützt Synapse, KRNL, Fluxus, AWP – mit LocalPlayer-Teleport und Fallback
+-- ✅ ServerHopper v5 – Anti-Crash Edition für AWP, KRNL, Synapse, Fluxus
+-- Features: LocalPlayer-Teleport, Fallback, HTTP-Toleranz, Debuglog
 
 local Players = game:GetService("Players")
 local TeleportService = game:GetService("TeleportService")
@@ -10,11 +10,11 @@ local PlaceID = game.PlaceId
 local CurrentServerId = game.JobId
 
 local Config = {
-    MinPlayers         = 2,   -- Mindestens x Spieler im Zielserver
-    RequiredFreeSlots  = 2,   -- Zielserver braucht mindestens x freie Plätze
-    MaxRetries         = 5,   -- Wie oft soll neu versucht werden
-    RetryDelay         = 5,   -- Sekunden zwischen Versuchen
-    RateLimitThreshold = 3    -- Wie oft HTTP-Fehler toleriert werden
+    MinPlayers         = 2,   -- Mindestanzahl an Spielern im Zielserver
+    RequiredFreeSlots  = 2,   -- Mindestanzahl an freien Plätzen
+    MaxRetries         = 5,   -- Max. Wiederholungen bei Fehlschlägen
+    RetryDelay         = 5,   -- Zeit zwischen Versuchen (Sekunden)
+    RateLimitThreshold = 3    -- Max. erlaubte HTTP-Fehler
 }
 
 local AttemptCount = 0
@@ -24,14 +24,14 @@ local function debugLog(...)
     print(os.date("[%H:%M:%S]") .. " [ServerHopper]", ...)
 end
 
-local function handleHttpRequest(url)
+local function safeHttpGet(url)
     local executor = identifyexecutor and identifyexecutor():lower() or "unknown"
     local methods = {
         ["synapse"] = function() return syn.request({Url = url}) end,
         ["krnl"] = function() return http.request({Url = url}) end,
         ["fluxus"] = function() return fluxus.request({Url = url}) end,
         ["electron"] = function() return request({Url = url}) end,
-        ["awp"] = function() return game:HttpGet(url) end
+        ["awp"] = function() return game:HttpGet(url) end,
     }
 
     local handler = methods[executor]
@@ -51,13 +51,19 @@ end
 
 local function fetchServers()
     local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100", PlaceID)
-    local response = handleHttpRequest(url)
+    local response = safeHttpGet(url)
     if not response then return nil end
 
     local ok, data = pcall(function()
         return HttpService:JSONDecode(response)
     end)
-    return ok and data.data or nil
+    if not ok or not data then
+        RateLimitCount += 1
+        debugLog("⚠️ JSON-Dekodierung fehlgeschlagen.")
+        return nil
+    end
+
+    return data.data or {}
 end
 
 local function filterServers(servers)
@@ -73,29 +79,34 @@ local function filterServers(servers)
     return valid
 end
 
-local function verifyTeleport(successId)
+local function verifyTeleport(targetId)
     task.delay(10, function()
         if game.JobId == CurrentServerId then
-            debugLog("⏱️ Kein Serverwechsel erfolgt. Wiederhole Teleport...")
-            TeleportService:Teleport(PlaceID, player)
+            debugLog("🕒 Teleport nicht erfolgt. Erzwungener Fallback...")
+            pcall(function()
+                TeleportService:Teleport(PlaceID, player)
+            end)
         else
-            debugLog("✅ Erfolgreich gewechselt zu neuem Server:", successId)
+            debugLog("✅ Erfolgreich gewechselt zu neuem Server:", targetId)
         end
     end)
 end
 
 local function attemptTeleport()
     local servers = fetchServers()
-    if not servers then return false end
+    if not servers then
+        debugLog("❌ Keine Serverdaten erhalten.")
+        return false
+    end
 
     local valid = filterServers(servers)
     if #valid == 0 then
-        debugLog("❌ Keine passenden Server gefunden.")
+        debugLog("❌ Keine geeigneten Server gefunden.")
         return false
     end
 
     local target = valid[math.random(1, #valid)]
-    debugLog("🎯 Versuche Teleport zu Server:", target)
+    debugLog("🎯 Teleportiere zu:", target)
 
     local success, err = pcall(function()
         TeleportService:TeleportToPlaceInstance(PlaceID, target, player)
@@ -104,6 +115,7 @@ local function attemptTeleport()
     if success then
         debugLog("📡 Teleport initiiert.")
         verifyTeleport(target)
+        task.wait(5) -- 🛡️ Verhindert Crash nach zu schnellem Script-Ende
         return true
     else
         debugLog("❌ Teleport fehlgeschlagen:", err)
@@ -115,13 +127,17 @@ local function main()
     debugLog("🚀 Starte ServerHopper für PlaceID:", PlaceID)
     while AttemptCount < Config.MaxRetries and RateLimitCount < Config.RateLimitThreshold do
         AttemptCount += 1
-        if attemptTeleport() then return end
+        if attemptTeleport() then
+            return
+        end
         debugLog("🔁 Neuer Versuch in", Config.RetryDelay .. "s")
         task.wait(Config.RetryDelay)
     end
 
-    debugLog("🛑 Max. Versuche erreicht – normaler Teleport...")
-    TeleportService:Teleport(PlaceID, player)
+    debugLog("🛑 Max. Versuche erreicht. Fallback zu Standard-Teleport...")
+    pcall(function()
+        TeleportService:Teleport(PlaceID, player)
+    end)
 end
 
 main()
