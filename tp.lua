@@ -111,23 +111,24 @@ if not serverData then
     end
 end
 
---// Schritt 3: Serverliste filtern und geeigneten Server auswählen
--- Falls API zusätzliche Seiten hatte, könnten weitere Anfragen nötig sein. In diesem Skript betrachten wir die erste erhaltene Seite.
+-- // Schritt 3: Serverliste filtern und geeigneten Server auswählen
 local validServers = {}
 if type(serverData) == "table" then
     for _, server in ipairs(serverData) do
-        -- Prüfe, ob Server gültig (nicht voll, kein VIP, nicht aktueller Server)
         local playing = server.playing or 0
         local maxPlayers = server.maxPlayers or 0
-        local isVIP = server.vipServerId ~= nil and server.vipServerId ~= "" and server.vipServerId ~= 0
-        if (maxPlayers == 0 or playing < maxPlayers)  -- nicht voll besetzt
-           and not isVIP                              -- kein VIP/Privatserver
-           and server.id ~= currentJobId              -- nicht der aktuelle Server
-        then
-            table.insert(validServers, server.id)
+        local serverId = server.id
+
+        -- Prüfe auf Spielfülle und ob ServerId existiert
+        if serverId and (maxPlayers == 0 or playing < maxPlayers) then
+            -- (Wir ignorieren vipServerId, weil es in deinem JSON nicht existiert)
+            if serverId ~= currentJobId then
+                table.insert(validServers, serverId)
+            end
         end
     end
 end
+
 
 if #validServers == 0 then
     -- Keine passenden Server gefunden
