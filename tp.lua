@@ -152,8 +152,8 @@ for attempt = 1, math.min(5, #validServers) do
         local ok, err = pcall(TeleportService.TeleportToPlaceInstance, TeleportService, placeId, targetJobId, player)
         if ok then
             print("Joining", targetJobId)
-            
-            if game.JobId != currentJobId then
+            local newcurrentJobId = game.JobId
+            if newcurrentJobId != currentJobId then
                 teleported = true
                 break  -- Teleport erfolgreich initiiert; Schleife verlassen
             end
