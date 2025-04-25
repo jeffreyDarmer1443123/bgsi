@@ -1,7 +1,17 @@
-wait(4)
+wait(3)
 --==================================================================
+-- tp.lua – Einmaliger, zuverlässiger Server-Hop (Client/Executor-kompatibel)
 --==================================================================
--- 1) TeleportInitFailed-Handler: Kick & Rejoin nur einmal, danach ignorieren
+
+-- Services & Variablen
+local TeleportService = game:GetService("TeleportService")
+local HttpService     = game:GetService("HttpService")
+local Players         = game:GetService("Players")
+local PlaceID         = game.PlaceId
+local CurrentJobId    = game.JobId
+
+--==================================================================
+-- 1) TeleportInitFailed-Handler: Einmaliger Kick & Rejoin
 --==================================================================
 local teleportFailedHandled = false
 TeleportService.TeleportInitFailed:Connect(function(errCode, errMsg)
@@ -14,18 +24,7 @@ TeleportService.TeleportInitFailed:Connect(function(errCode, errMsg)
 end)
 
 --==================================================================
-local initFailedConn
-initFailedConn = TeleportService.TeleportInitFailed:Connect(function(errCode, errMsg)
-    initFailedConn:Disconnect()  -- nur einmal ausführen
-    warn("[ServerHop] TeleportInitFailed:", errCode, errMsg, "→ Kick & Rejoin")
-    pcall(function() Players.LocalPlayer:Kick("Auto-Rejoin…") end)
-    task.wait(1)
-    TeleportService:Teleport(PlaceID)
-end)
-
---==================================================================
 -- 2) Universelle HTTP-GET-Funktion für Exploit-Clients
---==================================================================
 --==================================================================
 local function httpGet(url)
     if syn and syn.request then
@@ -38,40 +37,34 @@ local function httpGet(url)
         return game:HttpGet(url)
     end
 end
-
 local safeHttpGet = httpGet
 
 --==================================================================
--- 3) Versucht, eine Seite der Public-Server-API zu laden und zu parsen
+-- 3) Abrufen und Parsen der Public-Server-Liste
 --==================================================================
 local function fetchServers()
-    local raw = safeHttpGet(
-        ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100"):format(PlaceID)
-    )
+    local raw = safeHttpGet(("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100"):format(PlaceID))
     if not raw then
         warn("[ServerHop] HTTP-Fehler oder Rate-Limit")
         return nil
     end
-
     local ok, data = pcall(HttpService.JSONDecode, HttpService, raw)
     if not ok then
         warn("[ServerHop] JSON-Parsing fehlgeschlagen, raw:\n", raw)
         return nil
     end
-
     if data.errors then
         warn("[ServerHop] Rate-Limit erkannt: Warte 10 Sekunden")
         task.wait(10)
         return nil
     end
-
     return data.data
 end
 
 --==================================================================
--- 4) Wähle eine zufällige, andere Instanz aus der Liste und teleportiere
+-- 4) Suche & Teleportiere zu anderem Server
 --==================================================================
-task.wait(0.5)  -- kurz warten, damit TeleportService bereit ist
+task.wait(0.5)
 local servers = fetchServers()
 if servers then
     local valid = {}
@@ -83,22 +76,18 @@ if servers then
     if #valid > 0 then
         local targetId = valid[math.random(#valid)]
         warn("[ServerHop] Versuche TeleportToPlaceInstance →", targetId)
-
-        local ok, err = pcall(function()
-            -- TeleportToPlaceInstance ist oft server-only; kann client-seitig no-op sein
+        local ok = pcall(function()
             TeleportService:TeleportToPlaceInstance(PlaceID, targetId)
         end)
-
-        -- Fallback-Mechanismus: Wenn nach 5 Sekunden kein Serverwechsel passiert, kicken/teleporten
+        -- Fallback nach 5s, falls JobId unverändert
         task.delay(5, function()
             if game.JobId == CurrentJobId then
-                warn("[ServerHop] TeleportToPlaceInstance offenbar fehlgeschlagen, Kick & Teleport")
+                warn("[ServerHop] Teleport fehlgeschlagen, Kick+Rejoin")
                 pcall(function() Players.LocalPlayer:Kick("Auto-Rejoin…") end)
                 task.wait(1)
                 TeleportService:Teleport(PlaceID)
             end
         end)
-
         return
     else
         warn("[ServerHop] Kein freier Public-Server gefunden")
@@ -108,7 +97,7 @@ else
 end
 
 --==================================================================
--- 5) Fallback: Kick & Teleport, garantiert neuer Server
+-- 5) Fallback: Kick & Teleport
 --==================================================================
 warn("[ServerHop] Fallback: Kick & Teleport")
 pcall(function() Players.LocalPlayer:Kick("Auto-Rejoin…") end)
