@@ -67,7 +67,7 @@ end
 --==================================================================
 -- 4) Wähle eine zufällige, andere Instanz aus der Liste und teleportiere
 --==================================================================
-task.wait(0.5)  -- kurz warten, damit TeleportService bereit ist
+task.wait(1)  -- kurz warten, damit TeleportService bereit ist
 local servers = fetchServers()
 if servers then
     local valid = {}
