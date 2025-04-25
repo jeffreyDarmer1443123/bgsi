@@ -1,4 +1,5 @@
 --// Services und Variablen initialisieren
+wait(4)
 local HttpService = game:GetService("HttpService")             -- Dienst für JSON-Verarbeitung
 local TeleportService = game:GetService("TeleportService")     -- Dienst zum Teleportieren zwischen Servern
 local Players = game:GetService("Players")
