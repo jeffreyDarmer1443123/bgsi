@@ -134,7 +134,11 @@ if ok then
     )
 
     print("✅ DEBUG: sendWebhookEmbed wurde aufgerufen.")
-    foundEgg = True
+    
+    -- <<< Richtige Flags setzen
+    shared.foundEgg = true
+    shared.eggCheckFinished = true
+
 else
     error(message)
 end
