@@ -101,7 +101,7 @@ else
         if eggFolder.Name ~= "aura" and table.find(eggNames, eggFolder.Name) then
             local luck, timeText = getEggStats(eggFolder)
             local timeLeft = parseTimeToSeconds(timeText)
-            if timeLeft >= 300 then  -- Mindestens 5 Minuten Zeit übrig
+            if timeLeft >= 30 then  -- Mindestens 5 Minuten Zeit übrig
                 table.insert(candidates, {eggFolder = eggFolder, luck = luck, timeText = timeText})
             else
                 print(("⚠️ Ignoriere '%s' wegen zu wenig Zeit (%s)").format(eggFolder.Name, timeText or "N/A"))
