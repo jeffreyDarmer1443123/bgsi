@@ -1,3 +1,4 @@
+wait(4)
 --==================================================================
 -- tp.lua – Einmaliger, zuverlässiger Server-Hop (Client/Executor-kompatibel)
 -- Läuft komplett im LocalScript/Executor (Synapse, KRNL, Fluxus, AWP u.a.)
