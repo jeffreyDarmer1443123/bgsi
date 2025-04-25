@@ -153,7 +153,7 @@ for attempt = 1, math.min(5, #validServers) do
         if ok then
             print("Joining", targetJobId)
             local newcurrentJobId = game.JobId
-            if newcurrentJobId != currentJobId then
+            if newcurrentJobId ~= currentJobId then
                 teleported = true
                 break  -- Teleport erfolgreich initiiert; Schleife verlassen
             end
