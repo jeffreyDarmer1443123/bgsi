@@ -1,111 +1,99 @@
---==============================================================================
--- Universal Server Hopper v5
--- Kompatibel mit Synapse X, KRNL, Fluxus, AWP und Co.
--- Einmaliger Wechsel in einen öffentlichen, nicht vollen Server.
---==============================================================================
+--============================================================================== 
+-- Robust Server-Hop v6 
+-- Einmaliger Wechsel in einen öffentlichen, nicht vollen Server. 
+-- Vermeidet JSON-/HTTP-Abstürze und fällt sauber auf Teleport() zurück. 
+--============================================================================== 
 
-local TeleportService = game:GetService("TeleportService")
-local HttpService     = game:GetService("HttpService")
-local Players         = game:GetService("Players")
+local TeleportService   = game:GetService("TeleportService") 
+local HttpService       = game:GetService("HttpService") 
 
-local PlaceID          = game.PlaceId
-local CurrentServerId  = game.JobId
+local PlaceID           = game.PlaceId 
+local CurrentServerId   = game.JobId 
 
-local Config = {
-    RequiredFreeSlots = 1,   -- mindestens freie Plätze im Zielserver
-    MaxRetries        = 5,   -- wie oft neu versuchen
-    RetryDelay        = 2,   -- Sekunden Pause zwischen den Versuchen
-}
+--================================================================= 
+-- Universelle HTTP-GET-Funktion (Synapse, KRNL, Fluxus, AWP, Fallback) 
+--================================================================= 
+local function httpGet(url) 
+    if syn and syn.request then 
+        return syn.request({ Url = url, Method = "GET" }).Body 
+    elseif http_request then 
+        return http_request({ Url = url, Method = "GET" }).Body 
+    elseif request then 
+        return request({ Url = url, Method = "GET" }).Body 
+    else 
+        return game:HttpGet(url) 
+    end 
+end 
 
---=================================================================
--- Universelle HTTP-GET-Funktion, die gängige Executor-APIs nutzt
---=================================================================
-local function httpGet(url)
-    if syn and syn.request then
-        local res = syn.request({ Url = url, Method = "GET" })
-        return res and res.Body
-    elseif http_request then
-        local res = http_request({ Url = url, Method = "GET" })
-        return res and res.Body
-    elseif request then
-        local res = request({ Url = url, Method = "GET" })
-        return res and res.Body
-    else
-        return game:HttpGet(url)
-    end
-end
+--================================================================= 
+-- Versucht, die erste Seite der Public-Server-API abzurufen und zu parsen 
+-- Liefert eine Liste von Server-Tables oder nil bei Fehlern 
+--================================================================= 
+local function fetchServers() 
+    local url = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100"):format(PlaceID) 
+    local ok, body = pcall(httpGet, url) 
+    if not ok or type(body) ~= "string" then 
+        warn("[ServerHop] HTTP-Request fehlgeschlagen:", tostring(body)) 
+        return nil 
+    end 
 
---=====================================================
--- Fragt eine Seite der öffentlichen Serverliste ab
---=====================================================
-local function fetchServers()
-    local url = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100")
-        :format(PlaceID)
-    local ok, body = pcall(httpGet, url)
-    if not ok or not body then
-        return nil, "HTTP fehlgeschlagen"
-    end
-    local success, data = pcall(HttpService.JSONDecode, HttpService, body)
-    if not success or type(data) ~= "table" or type(data.data) ~= "table" then
-        return nil, "JSON-Fehler"
-    end
-    return data.data, nil
-end
+    -- Schnelle Prüfung, ob das überhaupt JSON sein könnte 
+    if not body:match("^%s*{") then 
+        warn("[ServerHop] Antwort kein JSON, raw:") 
+        warn(body) 
+        return nil 
+    end 
 
---=====================================================
--- Filtert nur Server mit genug freien Slots und
--- schließt den aktuellen Server aus
---=====================================================
-local function filterServers(servers)
-    local valid = {}
-    for _, srv in ipairs(servers) do
-        local freeSlots = srv.maxPlayers - srv.playing
-        if srv.id ~= CurrentServerId and freeSlots >= Config.RequiredFreeSlots then
-            table.insert(valid, srv.id)
-        end
-    end
-    return valid
-end
+    local success, data = pcall(HttpService.JSONDecode, HttpService, body) 
+    if not success or type(data) ~= "table" or type(data.data) ~= "table" then 
+        warn("[ServerHop] JSON-Parsing fehlgeschlagen, raw:") 
+        warn(body) 
+        return nil 
+    end 
 
---=====================================================
--- Versuch, einmalig zu einem passenden Server zu hoppen
--- mit optionalem Fallback
---=====================================================
-for attempt = 1, Config.MaxRetries do
-    local servers, err = fetchServers()
-    if servers then
-        local valid = filterServers(servers)
-        if #valid > 0 then
-            local targetId = valid[math.random(#valid)]
-            print(("[ServerHopper] Versuch #%d: Teleport zu %s"):format(attempt, targetId))
-            local ok = pcall(function()
-                TeleportService:TeleportToPlaceInstance(PlaceID, targetId)
-            end)
-            if ok then
-                return
-            else
-                warn("[ServerHopper] TeleportToPlaceInstance fehlgeschlagen, versuche Teleport()")
-                pcall(function()
-                    TeleportService:Teleport(PlaceID)
-                end)
-                return
-            end
-        else
-            warn(("[ServerHopper] Kein passender Server gefunden (Versuch %d/%d)"):format(attempt, Config.MaxRetries))
-        end
-    else
-        warn(("[ServerHopper] fetchServers-Fehler: %s (Versuch %d/%d)"):format(tostring(err), attempt, Config.MaxRetries))
-    end
+    return data.data 
+end 
 
-    if attempt < Config.MaxRetries then
-        task.wait(Config.RetryDelay)
-    end
-end
+--================================================================= 
+-- Filtert nur Server mit mindestens einem freien Slot und 
+-- schließt die aktuelle Instanz aus 
+--================================================================= 
+local function filterServers(servers) 
+    local valid = {} 
+    for _, srv in ipairs(servers) do 
+        local free = srv.maxPlayers - srv.playing 
+        if srv.id ~= CurrentServerId and free > 0 then 
+            table.insert(valid, srv.id) 
+        end 
+    end 
+    return valid 
+end 
 
---===========================================================================
--- Alle Versuche gescheitert: Fallback-Teleport, damit du wenigstens reconnected
---===========================================================================
-warn("[ServerHopper] Alle Versuche fehlgeschlagen, nutze Teleport() als Fallback")
-pcall(function()
-    TeleportService:Teleport(PlaceID)
-end)
+--================================================================= 
+-- Hauptlogik: 
+-- 1) Serverliste abrufen 
+-- 2) filtern 
+-- 3) einmalig teleportieren oder fallback 
+--================================================================= 
+local servers = fetchServers() 
+if servers then 
+    local valid = filterServers(servers) 
+    if #valid > 0 then 
+        local targetId = valid[ math.random(#valid) ] 
+        print("[ServerHop] Teleport zu:", targetId) 
+        local ok = pcall(function() 
+            TeleportService:TeleportToPlaceInstance(PlaceID, targetId) 
+        end) 
+        if ok then return end 
+        warn("[ServerHop] TeleportToPlaceInstance fehlgeschlagen, fallback Teleport()") 
+    else 
+        warn("[ServerHop] Kein freier Public-Server gefunden") 
+    end 
+else 
+    warn("[ServerHop] fetchServers() fehlgeschlagen, fallback Teleport()") 
+end 
+
+-- Fallback: einfacher Rejoin/Teleport, der intern auch nur freie Public-Server wählt 
+pcall(function() 
+    TeleportService:Teleport(PlaceID) 
+end) 
