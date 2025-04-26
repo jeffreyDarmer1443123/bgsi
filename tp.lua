@@ -36,15 +36,22 @@ end
 
 -- Liest Cache mit NextRefresh und JSON payload
 local function loadFromCache()
-    if typeof(isfile) ~= "function" or not isfile(cacheFile) then return nil end
+    if typeof(isfile) ~= "function" or not isfile(cacheFile) then
+        return nil
+    end
     local ok, content = pcall(readfile, cacheFile)
-    if not ok or not content then return nil end
+    if not ok or not content then
+        return nil
+    end
     local lines = {}
-    for line in content:gmatch("([^\n]+)") do
+    for line in content:gmatch("([^
+]+)") do
         table.insert(lines, line)
     end
     local nextRefresh = tonumber(lines[1])
-    if not nextRefresh or os.time() >= nextRefresh then return nil end
+    if not nextRefresh or os.time() >= nextRefresh then
+        return nil
+    end
     local jsonStr = table.concat({select(2, table.unpack(lines))}, "\n")
     local cache = safeDecode(jsonStr)
     return cache and cache.data or nil
@@ -52,7 +59,9 @@ end
 
 -- Speichert Cache mit NextRefresh vorangestellt
 local function saveToCache(data)
-    if typeof(writefile) ~= "function" then return end
+    if typeof(writefile) ~= "function" then
+        return
+    end
     pcall(function()
         local nextRefresh = os.time() + cacheMaxAge
         local payload = HttpService:JSONEncode({ timestamp = os.time(), data = data })
@@ -64,14 +73,20 @@ end
 -- Holt alle Seiten der Serverliste via Paginierung
 local function fetchServerList()
     local cached = loadFromCache()
-    if cached then return cached end
+    if cached then
+        return cached
+    end
 
     local allServers = {}
     local cursor = nil
     for page = 1, 5 do  -- max 5 Seiten
         local url = baseUrl
-        if cursor then url = url .. "&cursor=" .. cursor end
-        local ok, response = pcall(function() return game:HttpGet(url) end)
+        if cursor then
+            url = url .. "&cursor=" .. cursor
+        end
+        local ok, response = pcall(function()
+            return game:HttpGet(url)
+        end)
         if not ok or not response then
             warnMsg("Fehler beim Abrufen der Serverliste (Seite "..page..")")
             break
@@ -81,28 +96,38 @@ local function fetchServerList()
             warnMsg("Fehler beim Parsen der Serverliste (Seite "..page..")")
             break
         end
-        for _, srv in ipairs(parsed.data) do table.insert(allServers, srv) end
-        if not parsed.nextPageCursor then break end
+        for _, srv in ipairs(parsed.data) do
+            table.insert(allServers, srv)
+        end
+        if not parsed.nextPageCursor then
+            break
+        end
         cursor = parsed.nextPageCursor
         task.wait(0.3)
     end
 
-    if #allServers > 0 then saveToCache(allServers) end
-    return #allServers > 0 and allServers or nil
+    if #allServers > 0 then
+        saveToCache(allServers)
+        return allServers
+    end
+    return nil
 end
 
 --// Hauptlogik
 local oldJobId = currentJobId
 local servers = fetchServerList()
-if not servers then warnMsg("Keine Serverdaten verfügbar.") return end
+if not servers then
+    warnMsg("Keine Serverdaten verfügbar.")
+    return
+end
 
--- Filter: nur Server mit >=3 freien Plätzen, nicht aktueller Job
+-- Filter: nur Server mit >=3 freien Plätzen und nicht aktueller Job
 local valid = {}
 for _, srv in ipairs(servers) do
     if srv.id and srv.playing and srv.maxPlayers then
-        local free = srv.maxPlayers - srv.playing
-        if free >= 3 and srv.id ~= oldJobId then
-            table.insert(valid, {id = srv.id, free = free})
+        local freeSlots = srv.maxPlayers - srv.playing
+        if freeSlots >= 3 and srv.id ~= oldJobId then
+            table.insert(valid, { id = srv.id, free = freeSlots })
         end
     end
 end
@@ -112,17 +137,20 @@ if #valid == 0 then
     return
 end
 
--- Sortiere nach freien Plätzen (absteigend)
-table.sort(valid, function(a,b) return a.free > b.free end)
+-- Sortiere nach freien Plätzen absteigend
+table.sort(valid, function(a, b)
+    return a.free > b.free
+end)
 
--- Teleportversuche (bis 5)
-for i=1, math.min(5,#valid) do
-    local target = valid[i].id
+-- Teleportversuche (max. 5)
+for i = 1, math.min(5, #valid) do
+    local targetId = valid[i].id
     local ok, err = pcall(function()
-        TeleportService:TeleportToPlaceInstance(placeId, target, player)
+        TeleportService:TeleportToPlaceInstance(placeId, targetId, player)
     end)
     if ok then
-        print("🔄 Teleportiere... JobID:", target)
+        print("🔄 Teleportiere zu neuem Server... JobID:", targetId)
+        -- Absicherung: nach 5 Sekunden prüfen, ob wir tatsächlich gewechselt haben
         task.wait(5)
         if game.JobId == oldJobId then
             warnMsg("Absicherung: Serverwechsel gescheitert, Fallback...")
@@ -130,12 +158,14 @@ for i=1, math.min(5,#valid) do
         end
         return
     else
-        warnMsg("Teleport-Fehler ("..i.."): "..tostring(err))
+        warnMsg("Teleport-Fehler (Versuch "..i.."): " .. tostring(err))
         task.wait(1)
     end
 end
 
 warnMsg("Alle Teleportversuche fehlgeschlagen.")
-pcall(function() player:Kick("Server-Hop fehlgeschlagen") end)
+pcall(function()
+    player:Kick("Server-Hop fehlgeschlagen")
+end)
 task.wait(1)
 TeleportService:Teleport(placeId)
