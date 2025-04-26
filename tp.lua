@@ -34,32 +34,30 @@ local function safeDecode(jsonStr)
     return nil
 end
 
--- Liest den Cache mit NextRefresh und JSON payload
+-- Liest Cache mit NextRefresh und JSON payload
 local function loadFromCache()
     if typeof(isfile) ~= "function" or not isfile(cacheFile) then return nil end
     local ok, content = pcall(readfile, cacheFile)
     if not ok or not content then return nil end
     local lines = {}
-    for line in content:gmatch("([^
-]+)") do
+    for line in content:gmatch("([^\n]+)") do
         table.insert(lines, line)
     end
     local nextRefresh = tonumber(lines[1])
     if not nextRefresh or os.time() >= nextRefresh then return nil end
-    local jsonStr = table.concat({select(2, table.unpack(lines))}, "
-")
+    local jsonStr = table.concat({select(2, table.unpack(lines))}, "\n")
     local cache = safeDecode(jsonStr)
     return cache and cache.data or nil
 end
 
--- Speichert Cache mit NextRefresh voran
+-- Speichert Cache mit NextRefresh vorangestellt
 local function saveToCache(data)
     if typeof(writefile) ~= "function" then return end
     pcall(function()
         local nextRefresh = os.time() + cacheMaxAge
         local payload = HttpService:JSONEncode({ timestamp = os.time(), data = data })
-        writefile(cacheFile, tostring(nextRefresh) .. "
-" .. payload)
+        local toWrite = tostring(nextRefresh) .. "\n" .. payload
+        writefile(cacheFile, toWrite)
     end)
 end
 
@@ -75,11 +73,13 @@ local function fetchServerList()
         if cursor then url = url .. "&cursor=" .. cursor end
         local ok, response = pcall(function() return game:HttpGet(url) end)
         if not ok or not response then
-            warnMsg("Fehler beim Abrufen der Serverliste (Seite "..page..")") break
+            warnMsg("Fehler beim Abrufen der Serverliste (Seite "..page..")")
+            break
         end
         local parsed = safeDecode(response)
         if not parsed or type(parsed.data) ~= "table" then
-            warnMsg("Fehler beim Parsen der Serverliste (Seite "..page..")") break
+            warnMsg("Fehler beim Parsen der Serverliste (Seite "..page..")")
+            break
         end
         for _, srv in ipairs(parsed.data) do table.insert(allServers, srv) end
         if not parsed.nextPageCursor then break end
@@ -88,7 +88,7 @@ local function fetchServerList()
     end
 
     if #allServers > 0 then saveToCache(allServers) end
-    return #allServers>0 and allServers or nil
+    return #allServers > 0 and allServers or nil
 end
 
 --// Hauptlogik
