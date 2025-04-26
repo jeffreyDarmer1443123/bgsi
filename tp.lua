@@ -1,4 +1,4 @@
--- tp.lua (optimiert)
+-- tp.lua (optimiert + robuster)
 
 --// Services
 local HttpService = game:GetService("HttpService")
@@ -13,7 +13,7 @@ local serverListUrl = string.format("https://games.roblox.com/v1/games/%d/server
 
 --// Cache
 local cacheFile = "awp_servercache.txt"
-local cacheMaxAge = 30 -- Sekunden
+local cacheMaxAge = 60 -- Sekunden (etwas höher gesetzt)
 
 --// Utils
 local function warnMsg(text)
@@ -58,6 +58,8 @@ local function fetchServerList()
         return data
     end
 
+    local lastGoodData = nil
+
     for attempt = 1, 5 do
         local ok, response = pcall(function()
             return HttpService:GetAsync(serverListUrl)
@@ -75,16 +77,17 @@ local function fetchServerList()
             warnMsg("Fehler beim Abrufen der Serverliste (Versuch " .. attempt .. ")")
         end
 
-        task.wait(1)
+        task.wait(2) -- längere Pause (vorher 1 Sekunde)
     end
 
     warnMsg("Abbruch: Serverliste konnte nicht geladen werden.")
-    return nil
+    return loadFromCache() -- Letzter Versuch: verwende altes Cache, wenn möglich
 end
 
 --// Main
 local servers = fetchServerList()
 if not servers then
+    warnMsg("Kein Server-Daten verfügbar.")
     return
 end
 
