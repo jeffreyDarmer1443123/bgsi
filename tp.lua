@@ -1,50 +1,46 @@
--- tp_ultra.lua
+-- tp.lua (robustes Server-Hop mit Cache und HttpGet-Fallback)
 
 --// Services
-local HttpService = game:GetService("HttpService")
-local TeleportService = game:GetService("TeleportService")
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
+local HttpService      = game:GetService("HttpService")
+local TeleportService  = game:GetService("TeleportService")
+local Players          = game:GetService("Players")
+local player           = Players.LocalPlayer
 
 --// Config
-local placeId = game.PlaceId
-local currentJobId = game.JobId
-local cacheFile = "awp_servercache.txt"
-local cacheMaxAge = 60 -- Sekunden
+local placeId       = game.PlaceId
+local currentJobId   = game.JobId
+local serverListUrl  = string.format(
+    "https://games.roblox.com/v1/games/%d/servers/Public?excludeFullGames=true&limit=100",
+    placeId
+)
 
---// Utilities
-local function warnMsg(text)
-    warn("[Server-Hop] " .. tostring(text))
-end
+--// Cache
+local cacheFile     = "awp_servercache.txt"
+local cacheMaxAge   = 30  -- Sekunden
 
-local function notify(title, text, duration)
-    pcall(function()
-        game.StarterGui:SetCore("SendNotification", {
-            Title = title,
-            Text = text,
-            Duration = duration or 5
-        })
-    end)
+--// Utility-Funktionen
+local function warnMsg(msg)
+    warn("[Server-Hop] " .. tostring(msg))
 end
 
 local function safeDecode(jsonStr)
-    local success, result = pcall(function()
+    local ok, result = pcall(function()
         return HttpService:JSONDecode(jsonStr)
     end)
-    if success and type(result) == "table" then
+    if ok and type(result) == "table" then
         return result
     end
     return nil
 end
 
-local function loadCache()
+local function loadFromCache()
     if typeof(isfile) == "function" and isfile(cacheFile) then
-        local success, content = pcall(readfile, cacheFile)
-        if success and content then
-            local decoded = safeDecode(content)
-            if decoded and decoded.timestamp and decoded.data then
-                if os.time() - decoded.timestamp < cacheMaxAge then
-                    return decoded.data
+        local ok, content = pcall(readfile, cacheFile)
+        if ok and content then
+            local cache = safeDecode(content)
+            if cache and cache.timestamp and cache.data then
+                if os.time() - cache.timestamp < cacheMaxAge then
+                    return cache.data
                 end
             end
         end
@@ -52,7 +48,7 @@ local function loadCache()
     return nil
 end
 
-local function saveCache(data)
+local function saveToCache(data)
     if typeof(writefile) == "function" then
         pcall(function()
             writefile(cacheFile, HttpService:JSONEncode({ timestamp = os.time(), data = data }))
@@ -60,67 +56,52 @@ local function saveCache(data)
     end
 end
 
-local function fetchAllServers()
-    local servers = {}
-    local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?excludeFullGames=true&limit=100", placeId)
-    local cursor = nil
+--// Serverliste abrufen (Cache + Fallback auf HttpGet)
+local function fetchServerList()
+    -- 1) Aus Cache
+    local cached = loadFromCache()
+    if cached then
+        return cached
+    end
 
-    for page = 1, 5 do -- Maximal 5 Seiten laden
-        local queryUrl = url .. (cursor and ("&cursor=" .. cursor) or "")
-        local success, response = pcall(function()
-            return game:HttpGet(queryUrl)
+    -- 2) Online holen mit Retries
+    for attempt = 1, 5 do
+        local ok, response = pcall(function()
+            -- HttpGet statt GetAsync, um Blacklist zu umgehen
+            return game:HttpGet(serverListUrl)
         end)
 
-        if success and response then
-            local data = safeDecode(response)
-            if data and data.data then
-                for _, server in ipairs(data.data) do
-                    table.insert(servers, server)
-                end
-                cursor = data.nextPageCursor
-                if not cursor then
-                    break
-                end
+        if ok and response then
+            local parsed = safeDecode(response)
+            if parsed and type(parsed.data) == "table" then
+                saveToCache(parsed.data)
+                return parsed.data
             else
-                warnMsg("Fehler beim Parsen der Serverdaten (Seite "..page..")")
-                break
+                warnMsg("Fehler beim Parsen der Serverdaten (Versuch " .. attempt .. ")")
             end
         else
-            warnMsg("HTTP Fehler beim Laden der Serverliste (Seite "..page..")")
-            break
+            warnMsg("Fehler beim Abrufen der Serverdaten (Versuch " .. attempt .. ")")
         end
+
         task.wait(1)
     end
 
-    if #servers > 0 then
-        saveCache(servers)
-    end
-
-    return servers
+    warnMsg("Abbruch: Serverdaten konnten nicht geladen werden.")
+    return nil
 end
 
-local function fetchServers()
-    return loadCache() or fetchAllServers()
-end
-
---// Main
-local servers = fetchServers()
-if not servers or #servers == 0 then
-    warnMsg("Keine Serverdaten verfügbar.")
+--// Hauptlogik
+local servers = fetchServerList()
+if not servers then
     return
 end
 
--- Filter und sortieren
+-- Filtere leere und aktuellen Server aus
 local validServers = {}
-for _, server in ipairs(servers) do
-    if server.id and server.playing and server.maxPlayers then
-        if server.playing < server.maxPlayers and server.id ~= currentJobId then
-            table.insert(validServers, {
-                id = server.id,
-                playing = server.playing,
-                maxPlayers = server.maxPlayers,
-                ping = server.ping or math.random(30, 120) -- Fallback falls Ping fehlt
-            })
+for _, srv in ipairs(servers) do
+    if srv.id and srv.playing and srv.maxPlayers then
+        if srv.id ~= currentJobId and srv.playing < srv.maxPlayers then
+            table.insert(validServers, srv.id)
         end
     end
 end
@@ -130,46 +111,32 @@ if #validServers == 0 then
     return
 end
 
--- Sortieren nach: wenig Spieler -> niedriger Ping
-
--- Erst nach Ping
-table.sort(validServers, function(a, b)
-    return a.ping < b.ping
-end)
-
--- Dann nach Spielerzahl (Priorität auf freie Slots)
-table.sort(validServers, function(a, b)
-    return a.playing < b.playing
-end)
-
--- Shuffle leicht, damit nicht immer derselbe Server genommen wird
-math.randomseed(tick()*1000)
+-- Mische Liste
+math.randomseed(os.clock() * 100000)
 for i = #validServers, 2, -1 do
     local j = math.random(1, i)
     validServers[i], validServers[j] = validServers[j], validServers[i]
 end
 
--- Versuche intelligent zu verbinden
-for attempt = 1, math.min(7, #validServers) do
+-- Teleport-Loop mit Retries
+for attempt = 1, math.min(5, #validServers) do
     local target = validServers[attempt]
-    if target and target.id then
-        print(string.format("🔄 Teleportiere zu Server: %s (%d/%d Spieler, %d ms)", target.id, target.playing, target.maxPlayers, target.ping))
-        local success, err = pcall(function()
-            TeleportService:TeleportToPlaceInstance(placeId, target.id, player)
+    if target then
+        local ok, err = pcall(function()
+            TeleportService:TeleportToPlaceInstance(placeId, target, player)
         end)
-        if success then
-            notify("Server-Hop", "Teleport zu neuem Server erfolgreich!", 5)
+        if ok then
+            print("🔄 Teleportiere zu neuem Server... JobID:", target)
             return
         else
-            warnMsg("Teleport Fehler (Versuch "..attempt.."): ".. tostring(err))
+            warnMsg("Teleport Fehler (Versuch " .. attempt .. "): " .. tostring(err))
             task.wait(1)
         end
     end
 end
 
--- Alles gescheitert
 warnMsg("Alle Teleportversuche fehlgeschlagen.")
-notify("Server-Hop", "Konnte keinen neuen Server betreten.", 5)
+-- Fallback: Kick + Rückfall
 pcall(function()
     player:Kick("Server-Hop fehlgeschlagen")
 end)
