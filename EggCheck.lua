@@ -91,6 +91,7 @@ for _, eggFolder in ipairs(rifts:GetChildren()) do
 end
 if #candidates == 0 then
     error(("❌ Kein Egg mit den Namen %s gefunden."):format(table.concat(eggNames, ", ")))
+    shared.eggCheckFinished = true
     return
 end
 
