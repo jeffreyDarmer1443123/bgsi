@@ -1,6 +1,7 @@
 -- tp.lua (weiter optimiert mit erweiterter Fehlerbehandlung)
 
 --// Services
+wait(5)
 local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
