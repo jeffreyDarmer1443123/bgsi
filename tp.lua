@@ -43,15 +43,17 @@ local function loadFromCache()
     if not ok or not content then
         return nil
     end
-    local lines = {}  -- split nach Zeilen
-    for line in content:gmatch("([^\n]+)") do
+    local lines = {}
+    for line in content:gmatch("([^
+]+)") do
         table.insert(lines, line)
     end
     local nextRefresh = tonumber(lines[1])
     if not nextRefresh or os.time() >= nextRefresh then
         return nil
     end
-    local jsonStr = table.concat({select(2, table.unpack(lines))}, "\n")
+    local jsonStr = table.concat({select(2, table.unpack(lines))}, "
+")
     local cache = safeDecode(jsonStr)
     return cache and cache.data or nil
 end
@@ -64,7 +66,8 @@ local function saveToCache(data)
     pcall(function()
         local nextRefresh = os.time() + cacheMaxAge
         local payload = HttpService:JSONEncode({ timestamp = os.time(), data = data })
-        local toWrite = tostring(nextRefresh) .. "\n" .. payload
+        local toWrite = tostring(nextRefresh) .. "
+" .. payload
         writefile(cacheFile, toWrite)
     end)
 end
