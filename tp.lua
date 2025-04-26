@@ -62,7 +62,9 @@ end
 -- Holt alle Seiten der Serverliste via Paginierung
 local function fetchServerList()
     local cached = loadFromCache()
-    if cached then return cached end
+    if cached then 
+        return cached 
+    end
 
     local allServers = {}
     local cursor = nil
