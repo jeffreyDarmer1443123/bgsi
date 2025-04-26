@@ -28,11 +28,41 @@ local function printStatus(text)
     print("[🏠 Server-Hop] " .. text)
 end
 
--- ... (safeDecode, loadFromCache, saveToCache bleiben gleich wie vorher)
+local function safeDecode(jsonStr)
+    local ok, decoded = pcall(function()
+        return HttpService:JSONDecode(jsonStr)
+    end)
+    if ok and type(decoded) == "table" then
+        return decoded
+    end
+    return nil
+end
+
+local function loadFromCache()
+    if typeof(isfile) == "function" and isfile(cacheFile) then
+        local ok, content = pcall(readfile, cacheFile)
+        if ok and content then
+            local cache = safeDecode(content)
+            if cache and cache.timestamp and cache.data then
+                if os.time() - cache.timestamp < cacheMaxAge then
+                    return cache.data
+                end
+            end
+        end
+    end
+end
+
+local function saveToCache(data)
+    if typeof(writefile) == "function" then
+        pcall(function()
+            writefile(cacheFile, HttpService:JSONEncode({timestamp = os.time(), data = data}))
+        end)
+    end
+end
 
 local function fetchServerList()
     printStatus("Starte Serverliste-Abruf...")
-    
+
     local cached = loadFromCache()
     if cached then
         printStatus(string.format("Cache gefunden (%d Server)", #cached))
@@ -40,32 +70,49 @@ local function fetchServerList()
     end
 
     printStatus("Kein gültiger Cache vorhanden, starte API-Abruf...")
-    
+
     for attempt = 1, 7 do
         printStatus(string.format("API-Abruf Versuch %d/7...", attempt))
-        
-        -- ... (restliche fetchServerList Logik wie vorher)
-        
+
+        local ok, response = pcall(function()
+            return HttpService:GetAsync(serverListUrl)
+        end)
+
+        if ok and response then
+            local parsed = safeDecode(response)
+            if parsed and parsed.data and type(parsed.data) == "table" then
+                saveToCache(parsed.data)
+                return parsed.data
+            else
+                warnMsg("Fehler beim Parsen der Serverliste (Versuch " .. attempt .. ")")
+            end
+        else
+            warnMsg("HTTP Fehler (Versuch " .. attempt .. ")")
+        end
+
         task.wait(2 + attempt * 1.5)
     end
 
-    -- ... (emergency cache handling)
+    warnMsg("Abbruch: Serverliste konnte nicht geladen werden.")
+    return loadFromCache()
 end
 
---// Server-Verarbeitung
 local function processServers(servers)
     printStatus("Analysiere Server...")
-    
-    -- ... (existing processing logic)
-    
-    printStatus(string.format(
-        "Gefunden: %d/%d geeignete Server (Mindestspieler: %d, Maximaler Ping: %dms)",
-        #validServers,
-        #servers,
-        math.min(unpack(players)),
-        math.max(unpack(pings))
-    ))
-    
+
+    local validServers = {}
+    for _, server in ipairs(servers) do
+        if server.id and server.playing and server.maxPlayers then
+            if server.id ~= currentJobId and server.playing < server.maxPlayers then
+                table.insert(validServers, server)
+            end
+        end
+    end
+
+    if #validServers > 0 then
+        printStatus(string.format("Gefunden: %d passende Server", #validServers))
+    end
+
     return validServers
 end
 
@@ -91,24 +138,23 @@ printStatus(string.format("Top-Server Auswahl (%d Optionen):", #validServers))
 for i = 1, math.min(3, #validServers) do
     local s = validServers[i]
     printStatus(string.format("%d. [%s] %d/%d Spieler | %dms",
-        i, formatServerId(s.id), s.players, s.maxPlayers, s.ping))
+        i, formatServerId(s.id), s.playing, s.maxPlayers, s.ping or 0))
 end
 
--- Teleportversuche
 printStatus("Starte Verbindungsversuche...")
 for i = 1, math.min(7, #validServers) do
     local target = validServers[i]
-    
+
     printStatus(string.format(
         "Versuch %d: Verbinde zu [%s] (%d/%d Spieler, %dms)...",
-        i, formatServerId(target.id), target.players, target.maxPlayers, target.ping
+        i, formatServerId(target.id), target.playing, target.maxPlayers, target.ping or 0
     ))
-    
+
     local success, err = pcall(function()
         TeleportService:TeleportToPlaceInstance(placeId, target.id, player)
         task.wait(2)
     end)
-    
+
     if success then
         printStatus(string.format("✅ Erfolgreich verbunden mit [%s]", formatServerId(target.id)))
         return
@@ -117,6 +163,5 @@ for i = 1, math.min(7, #validServers) do
     end
 end
 
--- Alles fehlgeschlagen
 printStatus("⚠️ Alle Verbindungsversuche fehlgeschlagen - Letzter Versuch...")
 TeleportService:Teleport(placeId)
