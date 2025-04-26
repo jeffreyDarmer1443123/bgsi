@@ -43,9 +43,8 @@ local function loadFromCache()
     if not ok or not content then
         return nil
     end
-    local lines = {}
-    for line in content:gmatch("([^
-]+)") do
+    local lines = {}  -- split nach Zeilen
+    for line in content:gmatch("([^\n]+)") do
         table.insert(lines, line)
     end
     local nextRefresh = tonumber(lines[1])
