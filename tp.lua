@@ -120,7 +120,7 @@ if type(serverData) == "table" then
         local serverId = server.id
 
         -- Prüfe auf Spielfülle und ob ServerId existiert
-        if serverId and (maxPlayers == 0 or playing < maxPlayers) then
+        if serverId and (maxPlayers == 0 or playing < 8) then
             -- (Wir ignorieren vipServerId, weil es in deinem JSON nicht existiert)
             if serverId ~= currentJobId then
                 table.insert(validServers, serverId)
