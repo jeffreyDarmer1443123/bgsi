@@ -98,19 +98,18 @@ if not servers then
     return
 end
 
--- Filtere aktuelle Server und solche mit weniger als 3 freien Plätzen aus
+-- Filtere leere und aktuellen Server aus
 local validServers = {}
 for _, srv in ipairs(servers) do
     if srv.id and srv.playing and srv.maxPlayers then
-        local freeSlots = srv.maxPlayers - srv.playing
-        if srv.id ~= oldJobId and freeSlots >= 3 then
+        if srv.id ~= oldJobId and srv.playing < srv.maxPlayers then
             table.insert(validServers, srv.id)
         end
     end
 end
 
 if #validServers == 0 then
-    warnMsg("Keine passenden Server gefunden (mindestens 3 freie Plätze erforderlich).")
+    warnMsg("Keine passenden Server gefunden.")
     return
 end
 
