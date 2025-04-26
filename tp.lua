@@ -1,6 +1,7 @@
 -- tp.lua (robustes Server-Hop mit Cache, HttpGet-Fallback und Absicherungs-Check)
 
 --// Services
+wait(4)
 local HttpService      = game:GetService("HttpService")
 local TeleportService  = game:GetService("TeleportService")
 local Players          = game:GetService("Players")
