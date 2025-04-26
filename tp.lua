@@ -43,16 +43,19 @@ if typeof(isfile) == "function" and isfile(cacheFile) then
     if success and cacheContent then
         -- Versuche, JSON zu parsen
         local success2, cacheTable = pcall(HttpService.JSONDecode, HttpService, cacheContent)
-        if success2 and type(cacheTable) == "table" and cacheTable.timestamp and cacheTable.data then
-            local age = os.time() - tonumber(cacheTable.timestamp)
+        if success2 and typeof(cacheTable) == "table" and cacheTable.data and typeof(cacheTable.data) == "table" then
+            local age = os.time() - (cacheTable.timestamp or 0)
             if age < cacheMaxAge then
-                -- Cache ist jünger als 2 Minuten, wir verwenden diese Daten
                 serverData = cacheTable.data
                 useCache = true
             else
-                -- Cache ist zu alt
-                -- (Kein Fehler, wir holen gleich frische Daten. Kein Notify nötig.)
+                warn("🕑 Cache abgelaufen, lade neue Serverliste...")
             end
+        else
+            warn("⚠️ Cache fehlerhaft oder unverständlich, ignoriere Cache.")
+        end
+
+            
         else
             -- Cache-Datei ist korrupt oder kein gültiges JSON
             warn("Server-Hop", "Cache-Daten ungültig, lade Serverliste neu...", 5)
