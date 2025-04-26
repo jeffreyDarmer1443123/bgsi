@@ -73,16 +73,14 @@ if not serverData then
             -- HTTP-Aufruf erfolgreich, Ergebnis (JSON-Text) liegt in 'result'
             -- Versuche JSON zu dekodieren
             local ok2, data = pcall(HttpService.JSONDecode, HttpService, result)
-            if ok2 and type(data)=="table" and data.data then
-                serverData = data.data  -- 'data.data' enthält die Serverliste (Array)
+            if ok2 and typeof(data) == "table" and data.data and typeof(data.data) == "table" then
+                serverData = data.data
                 httpSuccess = true
-                -- Im Erfolgsfall die Schleife abbrechen
                 break
             else
-                -- JSON-Parse-Fehler (z.B. API hat ungültige Antwort geliefert)
-                warn("Server-Hop", "Fehler: Serverliste unverständlich (Versuch "..attempt.." von 5)", 5)
+                warn("⚠️ Server-Hop Fehler: Serverliste unverständlich (Versuch "..attempt.." von 5)")
             end
-        else
+
             -- HTTP-Fehler (Kein Zugriff oder Timeout etc.)
             warn("Server-Hop", "Fehler: Konnte Serverliste nicht abrufen (Versuch "..attempt.." von 5)", 5)
         end
