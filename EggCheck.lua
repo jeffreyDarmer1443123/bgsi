@@ -90,7 +90,7 @@ for _, eggFolder in ipairs(rifts:GetChildren()) do
     end
 end
 if #candidates == 0 then
-    error(("❌ Kein Egg mit den Namen %s gefunden."):format(table.concat(eggNames, ", ")))
+    warn(("❌ Kein Egg mit den Namen %s gefunden."):format(table.concat(eggNames, ", ")))
     return
 end
 
