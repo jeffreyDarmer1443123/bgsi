@@ -13,7 +13,7 @@ local serverListUrl = string.format("https://games.roblox.com/v1/games/%d/server
 
 --// Cache
 local cacheFile = "awp_servercache.txt"
-local cacheMaxAge = 120 -- Sekunden (länger für schlechte Verbindungen)
+local cacheMaxAge = 60 -- Sekunden (länger für schlechte Verbindungen)
 
 --// Utils
 local function warnMsg(text)
