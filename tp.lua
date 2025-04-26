@@ -24,18 +24,21 @@ local function safeDecode(jsonStr)
     local ok, decoded = pcall(function()
         return HttpService:JSONDecode(jsonStr)
     end)
-    if ok and typeof(decoded) == "table" then
+    if ok and type(decoded) == "table" then
         return decoded
     end
+    return nil
 end
 
 local function loadFromCache()
     if typeof(isfile) == "function" and isfile(cacheFile) then
         local ok, content = pcall(readfile, cacheFile)
         if ok and content then
-            local data = safeDecode(content)
-            if data and data.timestamp and data.data and os.time() - data.timestamp < cacheMaxAge then
-                return data.data
+            local cache = safeDecode(content)
+            if cache and cache.timestamp and cache.data then
+                if os.time() - cache.timestamp < cacheMaxAge then
+                    return cache.data
+                end
             end
         end
     end
@@ -51,16 +54,18 @@ end
 
 local function fetchServerList()
     local data = loadFromCache()
-    if data then return data end
+    if data then
+        return data
+    end
 
     for attempt = 1, 5 do
         local ok, response = pcall(function()
-            return game:HttpGet(serverListUrl)
+            return HttpService:GetAsync(serverListUrl)
         end)
 
         if ok and response then
             local parsed = safeDecode(response)
-            if parsed and typeof(parsed.data) == "table" then
+            if parsed and parsed.data and type(parsed.data) == "table" then
                 saveToCache(parsed.data)
                 return parsed.data
             else
@@ -79,12 +84,14 @@ end
 
 --// Main
 local servers = fetchServerList()
-if not servers then return end
+if not servers then
+    return
+end
 
 local validServers = {}
 for _, server in ipairs(servers) do
-    if server.id and server.playing and server.maxPlayers and server.id ~= currentJobId then
-        if server.playing < server.maxPlayers then
+    if server.id and server.playing and server.maxPlayers then
+        if server.id ~= currentJobId and server.playing < server.maxPlayers then
             table.insert(validServers, server.id)
         end
     end
@@ -95,7 +102,7 @@ if #validServers == 0 then
     return
 end
 
-math.randomseed(os.clock()*100000)
+math.randomseed(os.clock() * 100000)
 for i = #validServers, 2, -1 do
     local j = math.random(1, i)
     validServers[i], validServers[j] = validServers[j], validServers[i]
