@@ -1,4 +1,4 @@
--- tp.lua (robustes Server-Hop mit Cache und HttpGet-Fallback)
+-- tp.lua (robustes Server-Hop mit Cache, HttpGet-Fallback und Absicherungs-Check)
 
 --// Services
 local HttpService      = game:GetService("HttpService")
@@ -7,16 +7,16 @@ local Players          = game:GetService("Players")
 local player           = Players.LocalPlayer
 
 --// Config
-local placeId       = game.PlaceId
-local currentJobId   = game.JobId
-local serverListUrl  = string.format(
+local placeId         = game.PlaceId
+local currentJobId    = game.JobId
+local serverListUrl   = string.format(
     "https://games.roblox.com/v1/games/%d/servers/Public?excludeFullGames=true&limit=100",
     placeId
 )
 
 --// Cache
-local cacheFile     = "awp_servercache.txt"
-local cacheMaxAge   = 30  -- Sekunden
+local cacheFile       = "awp_servercache.txt"
+local cacheMaxAge     = 30  -- Sekunden
 
 --// Utility-Funktionen
 local function warnMsg(msg)
@@ -91,6 +91,7 @@ local function fetchServerList()
 end
 
 --// Hauptlogik
+local oldJobId = currentJobId
 local servers = fetchServerList()
 if not servers then
     return
@@ -100,7 +101,7 @@ end
 local validServers = {}
 for _, srv in ipairs(servers) do
     if srv.id and srv.playing and srv.maxPlayers then
-        if srv.id ~= currentJobId and srv.playing < srv.maxPlayers then
+        if srv.id ~= oldJobId and srv.playing < srv.maxPlayers then
             table.insert(validServers, srv.id)
         end
     end
@@ -118,7 +119,7 @@ for i = #validServers, 2, -1 do
     validServers[i], validServers[j] = validServers[j], validServers[i]
 end
 
--- Teleport-Loop mit Retries
+-- Teleport-Loop mit Retries und Absicherung
 for attempt = 1, math.min(5, #validServers) do
     local target = validServers[attempt]
     if target then
@@ -127,6 +128,12 @@ for attempt = 1, math.min(5, #validServers) do
         end)
         if ok then
             print("🔄 Teleportiere zu neuem Server... JobID:", target)
+            -- Absicherung: nach 5 Sekunden prüfen, ob JobId gewechselt
+            task.wait(5)
+            if game.JobId == oldJobId then
+                warnMsg("Absicherung: Serverwechsel gescheitert, bleibe nicht hier. Fallback...")
+                TeleportService:Teleport(placeId)
+            end
             return
         else
             warnMsg("Teleport Fehler (Versuch " .. attempt .. "): " .. tostring(err))
