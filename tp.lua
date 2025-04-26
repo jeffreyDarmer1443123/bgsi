@@ -40,10 +40,14 @@ local function loadFromCache()
     local ok, content = pcall(readfile, cacheFile)
     if not ok or not content then return nil end
     local lines = {}
-    for line in content:gmatch("([^\n]+)") do table.insert(lines, line) end
+    for line in content:gmatch("([^
+]+)") do
+        table.insert(lines, line)
+    end
     local nextRefresh = tonumber(lines[1])
     if not nextRefresh or os.time() >= nextRefresh then return nil end
-    local jsonStr = table.concat({select(2, table.unpack(lines))}, "\n")
+    local jsonStr = table.concat({select(2, table.unpack(lines))}, "
+")
     local cache = safeDecode(jsonStr)
     return cache and cache.data or nil
 end
@@ -54,16 +58,15 @@ local function saveToCache(data)
     pcall(function()
         local nextRefresh = os.time() + cacheMaxAge
         local payload = HttpService:JSONEncode({ timestamp = os.time(), data = data })
-        writefile(cacheFile, tostring(nextRefresh) .. "\n" .. payload)
+        writefile(cacheFile, tostring(nextRefresh) .. "
+" .. payload)
     end)
 end
 
 -- Holt alle Seiten der Serverliste via Paginierung
 local function fetchServerList()
     local cached = loadFromCache()
-    if cached then 
-        return cached 
-    end
+    if cached then return cached end
 
     local allServers = {}
     local cursor = nil
