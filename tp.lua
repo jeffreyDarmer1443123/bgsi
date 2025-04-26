@@ -34,13 +34,22 @@ local function safeDecode(jsonStr)
     return nil
 end
 
+-- Liest den Cache und prüft anhand der ersten Zeile den NextRefresh-Timestamp
 local function loadFromCache()
     if typeof(isfile) == "function" and isfile(cacheFile) then
         local ok, content = pcall(readfile, cacheFile)
         if ok and content then
-            local cache = safeDecode(content)
-            if cache and cache.timestamp and cache.data then
-                if os.time() - cache.timestamp < cacheMaxAge then
+            local lines = {}
+            for line in content:gmatch("([^]+)") do
+                table.insert(lines, line)
+            end
+            -- Erste Zeile enthält NextRefresh
+            local nextRefresh = tonumber(lines[1])
+            if nextRefresh and os.time() < nextRefresh then
+                -- Rest zusammenfügen
+                local jsonStr = table.concat({select(2, table.unpack(lines))}, "\n")
+                local cache = safeDecode(jsonStr)
+                if cache and cache.data then
                     return cache.data
                 end
             end
@@ -49,10 +58,14 @@ local function loadFromCache()
     return nil
 end
 
+-- Speichert den Cache mit NextRefresh als erste Zeile
 local function saveToCache(data)
     if typeof(writefile) == "function" then
         pcall(function()
-            writefile(cacheFile, HttpService:JSONEncode({ timestamp = os.time(), data = data }))
+            local nextRefresh = os.time() + cacheMaxAge
+            local payload = HttpService:JSONEncode({ timestamp = os.time(), data = data })
+            local toWrite = tostring(nextRefresh) .. "\n" .. payload
+            writefile(cacheFile, toWrite)
         end)
     end
 end
