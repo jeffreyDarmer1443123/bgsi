@@ -40,7 +40,7 @@ local function loadFromCache()
         local ok, content = pcall(readfile, cacheFile)
         if ok and content then
             local lines = {}
-            for line in content:gmatch("([^]+)") do
+            for line in content:gmatch("([^\n]+)") do
                 table.insert(lines, line)
             end
             -- Erste Zeile enthält NextRefresh
