@@ -145,7 +145,7 @@ end
 -- Hauptfunktion
 local function findBestServer()
     -- Lösche alten Cache bei Neustart
-    if #readCache() or {} == 0 then
+    if readCache() or {} == 0 then
         pcall(writefile, CACHE_FILE, "")
     end
 
