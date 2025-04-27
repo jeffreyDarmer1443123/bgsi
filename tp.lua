@@ -14,7 +14,7 @@ local baseUrl = "https://games.roblox.com/v1/games/" .. gameId .. "/servers/Publ
 
 local serverFile = "server_ids.txt"
 local cooldownFile = "server_refresh_time.txt"
-local refreshCooldown = 600 -- in Sekunden (10 Minuten bevor neue Server geladen werden)
+local refreshCooldown = 60 -- in Sekunden (10 Minuten bevor neue Server geladen werden)
 
 -- Funktion, die einen HTTP-Request mit Retry-Logik ausführt
 local function fetchWithRetry(url)
