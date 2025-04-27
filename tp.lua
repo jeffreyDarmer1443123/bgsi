@@ -51,7 +51,7 @@ local function loadFromCache()
     if not nextRefresh or os.time() >= nextRefresh then
         return nil
     end
-    local jsonStr = table.concat({select(2, table.unpack(lines))}, "\n")
+    local jsonStr = table.concat({select(2, table.unpack(lines))}, "\n") -- Syntaxfehler behoben
     local cache = safeDecode(jsonStr)
     return cache and cache.data or nil
 end
@@ -137,7 +137,7 @@ local valid = {}
 for _, srv in ipairs(servers) do
     if srv.id and srv.playing and srv.maxPlayers then
         if type(srv.playing) ~= "number" or type(srv.maxPlayers) ~= "number" then
-            continue
+            goto continue -- Syntax korrigiert
         end
         
         local freeSlots = srv.maxPlayers - srv.playing
@@ -149,6 +149,7 @@ for _, srv in ipairs(servers) do
             table.insert(valid, { id = srv.id, free = freeSlots })
         end
     end
+    ::continue:: -- Label hinzugefügt
 end
 
 -- Fallback: Mindestanforderung senken, wenn keine Server gefunden
