@@ -8,7 +8,7 @@ local foundEgg = shared.foundEgg
 local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
 	local HttpService = game:GetService("HttpService")
 
-	local isManEgg = eggName:lower() == "aura"
+	local isManEgg = eggName:lower() == "silly"
 	local embedColor = isManEgg and 0x9B59B6 or 0x2ECC71
 	local mention = isManEgg and "<@palkins7>" or ""
 
@@ -69,7 +69,7 @@ if not rifts then
     error("Ordner Workspace.Rendered.Rifts nicht gefunden.")
 end
 
-local manEgg = rifts:FindFirstChild("aura")
+local manEgg = rifts:FindFirstChild("silly")
 if manEgg then
     local luck, timeText = getEggStats(manEgg)
     local yInfo = ""
@@ -78,14 +78,14 @@ if manEgg then
         yInfo = (" | Y=%.2f"):format(outputPart.Position.Y)
     end
     local timeInfo = timeText and (" | Zeit übrig: " .. timeText) or ""
-    print(("✅ 'aura': Luck %s%s%s"):format(luck or "n/A", timeInfo, yInfo))
+    print(("✅ 'silly': Luck %s%s%s"):format(luck or "n/A", timeInfo, yInfo))
 else
-    print("ℹ️ Kein 'aura' gefunden.")
+    print("ℹ️ Kein 'silly' gefunden.")
 end
 
 local candidates = {}
 for _, eggFolder in ipairs(rifts:GetChildren()) do
-    if eggFolder.Name ~= "aura" and table.find(eggNames, eggFolder.Name) then
+    if eggFolder.Name ~= "silly" and table.find(eggNames, eggFolder.Name) then
         table.insert(candidates, eggFolder)
     end
 end
