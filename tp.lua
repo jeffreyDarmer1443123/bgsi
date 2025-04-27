@@ -11,7 +11,7 @@ local player          = Players.LocalPlayer
 local PLACE_ID         = game.PlaceId
 local CACHE_FILE       = "ServerCache.txt"
 local BLACKLIST_FILE   = "Blacklist.txt"
-local CACHE_DURATION   = 30        -- Sekunden, wie lange der Cache gültig bleibt
+local CACHE_DURATION   = 60        -- Sekunden, wie lange der Cache gültig bleibt
 local MIN_FREE_SLOTS   = 3
 local MAX_API_ATTEMPTS = 3
 local BASE_URL_FMT     = "https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100%s"
