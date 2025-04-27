@@ -1,201 +1,176 @@
--- tp.lua (robustes Server-Hop mit Cache, HttpGet-Fallback, Paginierung und Absicherungs-Check)
+-- ServerHop.lua (Robuster Server-Hop mit Cache und Auto-Retry)
 
---// Services
-wait(4)
-local HttpService      = game:GetService("HttpService")
-local TeleportService  = game:GetService("TeleportService")
-local Players          = game:GetService("Players")
-local player           = Players.LocalPlayer
+-- Services
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
 
---// Config
-local placeId         = game.PlaceId
-local currentJobId    = game.JobId
-local baseUrl         = string.format(
-    "https://games.roblox.com/v1/games/%d/servers/Public?excludeFullGames=true&limit=100",
-    placeId
-)
+-- Konfiguration
+local PLACE_ID = game.PlaceId
+local CACHE_FILE = "ServerCache.txt"
+local CACHE_DURATION = 30
+local MIN_FREE_SLOTS = 3
+local MAX_ATTEMPTS = 5
+local RETRY_DELAY = 2
 
---// Cache
-local cacheFile       = "awp_servercache.txt"
-local cacheMaxAge     = 30  -- Sekunden
+-- Initialisierung
+local lastRefresh = 0
+local isActive = true
+local cooldown = 0
 
---// Utility-Funktionen
-local function warnMsg(msg)
-    warn("[Server-Hop] " .. tostring(msg))
+-- Hilfsfunktionen
+local function log(message, isWarning)
+    local prefix = isWarning and "WARN" or "INFO"
+    warn("["..prefix.."] ServerHop: "..message)
 end
 
-local function safeDecode(jsonStr)
-    local ok, result = pcall(function()
-        return HttpService:JSONDecode(jsonStr)
-    end)
-    if ok and type(result) == "table" then
-        return result
-    end
-    return nil
+local function deepCopy(tbl)
+    local copy = {}
+    for k,v in pairs(tbl) do copy[k] = type(v) == "table" and deepCopy(v) or v end
+    return copy
 end
 
--- Liest Cache mit NextRefresh und JSON payload
-local function loadFromCache()
-    if typeof(isfile) ~= "function" or not isfile(cacheFile) then
-        return nil
-    end
-    local ok, content = pcall(readfile, cacheFile)
-    if not ok or not content then
-        return nil
-    end
+-- Cache Management
+local function readCache()
+    if not isfile(CACHE_FILE) then return nil end
+    
+    local content = readfile(CACHE_FILE)
     local lines = {}
-    for line in content:gmatch("([^\n]+)") do
+    for line in content:gmatch("[^\r\n]+") do
         table.insert(lines, line)
     end
-    local nextRefresh = tonumber(lines[1])
-    if not nextRefresh or os.time() >= nextRefresh then
-        return nil
-    end
-    local jsonStr = table.concat({select(2, table.unpack(lines))}, "\n") -- Syntaxfehler behoben
-    local cache = safeDecode(jsonStr)
-    return cache and cache.data or nil
+    
+    return {
+        nextRefresh = tonumber(lines[1]),
+        servers = HttpService:JSONDecode(table.concat(lines, "", 2))
+    }
 end
 
--- Speichert Cache mit NextRefresh vorangestellt
-local function saveToCache(data)
-    if typeof(writefile) ~= "function" then
-        return
-    end
-    pcall(function()
-        local nextRefresh = os.time() + cacheMaxAge
-        local payload = HttpService:JSONEncode({ timestamp = os.time(), data = data })
-        local toWrite = tostring(nextRefresh) .. "\n" .. payload
-        writefile(cacheFile, toWrite)
-    end)
+local function writeCache(servers)
+    local data = {
+        os.time() + CACHE_DURATION,
+        HttpService:JSONEncode(servers)
+    }
+    writefile(CACHE_FILE, table.concat(data, "\n"))
 end
 
--- Holt alle Seiten der Serverliste via Paginierung
-local function fetchServerList()
-    local cached = loadFromCache()
-    if cached then
-        return cached
-    end
-
-    local allServers = {}
-    local cursor = nil
-    for page = 1, 5 do  -- max 5 Seiten
-        local url = baseUrl
-        if cursor then
-            url = url .. "&cursor=" .. cursor
-        end
-        
-        -- HTTP-Anfrage mit Fehlerbehandlung
-        local ok, response = pcall(function()
+-- Serverabfrage
+local function fetchServers(cursor)
+    local url = string.format(
+        "https://games.roblox.com/v1/games/%d/servers/Public?limit=100%s",
+        PLACE_ID,
+        cursor and "&cursor="..cursor or ""
+    )
+    
+    for i = 1, MAX_ATTEMPTS do
+        local success, response = pcall(function()
             return game:HttpGet(url, true)
         end)
-        if not ok or not response then
-            warnMsg("Fehler beim Abrufen der Serverliste (Seite "..page..")")
-            cursor = nil -- Reset cursor bei Fehlern
-            task.wait(0.5)
-            goto continue
+        
+        if success then
+            local decoded = pcall(HttpService.JSONDecode, HttpService, response)
+            if decoded and decoded.data then
+                return decoded
+            end
         end
-
-        -- JSON-Verarbeitung
-        local parsed = safeDecode(response)
-        if not parsed or type(parsed.data) ~= "table" then
-            warnMsg("Fehler beim Parsen der Serverliste (Seite "..page..")")
-            cursor = nil
-            task.wait(0.5)
-            goto continue
-        end
-
-        -- Serverdaten sammeln
-        for _, srv in ipairs(parsed.data) do
-            table.insert(allServers, srv)
-        end
-
-        -- Cursor für nächste Seite
-        cursor = parsed.nextPageCursor or nil
-        if not cursor then break end
-
-        ::continue::
-        task.wait(0.3) -- Rate-Limit vermeiden
-    end
-
-    if #allServers > 0 then
-        saveToCache(allServers)
-        return allServers
+        
+        task.wait(RETRY_DELAY * i)
     end
     return nil
 end
 
---// Hauptlogik
-local oldJobId = currentJobId
-local servers = fetchServerList()
-if not servers then
-    warnMsg("Keine Serverdaten verfügbar.")
-    return
-end
-
--- Erweiterte Filterung der Server
-local valid = {}
-for _, srv in ipairs(servers) do
-    if srv.id and srv.playing and srv.maxPlayers then
-        if type(srv.playing) ~= "number" or type(srv.maxPlayers) ~= "number" then
-            goto continue -- Syntax korrigiert
-        end
-        
-        local freeSlots = srv.maxPlayers - srv.playing
-        if freeSlots >= 3 
-            and srv.id ~= oldJobId 
-            and srv.maxPlayers > 0 
-            and freeSlots > 0 
-        then
-            table.insert(valid, { id = srv.id, free = freeSlots })
-        end
+local function getValidServers()
+    local cache = readCache()
+    if cache and os.time() < cache.nextRefresh then
+        return cache.servers
     end
-    ::continue:: -- Label hinzugefügt
-end
 
--- Fallback: Mindestanforderung senken, wenn keine Server gefunden
-if #valid == 0 then
-    for _, srv in ipairs(servers) do
-        if srv.id and srv.playing and srv.maxPlayers then
-            local freeSlots = srv.maxPlayers - srv.playing
-            if freeSlots >= 1 and srv.id ~= oldJobId then
-                table.insert(valid, { id = srv.id, free = freeSlots })
+    local validServers = {}
+    local cursor = nil
+    
+    for _ = 1, 3 do -- Max 3 Seiten
+        local data = fetchServers(cursor)
+        if not data then break end
+        
+        for _,server in ipairs(data.data) do
+            if server.id ~= game.JobId
+                and not server.vipServer
+                and server.playing < server.maxPlayers
+                and (server.maxPlayers - server.playing) >= MIN_FREE_SLOTS
+            then
+                table.insert(validServers, {
+                    id = server.id,
+                    free = server.maxPlayers - server.playing,
+                    players = server.playing,
+                    capacity = server.maxPlayers
+                })
             end
         end
+        
+        cursor = data.nextPageCursor
+        if not cursor then break end
+        task.wait(0.5)
     end
+    
+    if #validServers > 0 then
+        writeCache(validServers)
+    elseif cache then
+        validServers = deepCopy(cache.servers)
+    end
+    
+    return validServers
 end
 
-if #valid == 0 then
-    warnMsg("Keine geeigneten Server gefunden. Starte Fallback-Teleport...")
-    TeleportService:Teleport(placeId)
-    return
-end
-
--- Sortiere nach freien Plätzen absteigend
-table.sort(valid, function(a, b)
-    return a.free > b.free
-end)
-
--- Teleportversuche (max. 5)
-for i = 1, math.min(5, #valid) do
-    local targetId = valid[i].id
-    local ok, err = pcall(function()
-        TeleportService:TeleportToPlaceInstance(placeId, targetId, player)
+-- Teleportlogik
+local function attemptTeleport(servers)
+    table.sort(servers, function(a,b)
+        return (a.free / a.capacity) > (b.free / b.capacity)
     end)
-    if ok then
-        print("🔄 Teleportiere zu neuem Server... JobID:", targetId)
-        -- Absicherung: nach 5 Sekunden prüfen, ob gewechselt wurde
-        task.wait(5)
-        if game.JobId == oldJobId then
-            warnMsg("Absicherung: Serverwechsel gescheitert, Fallback...")
-            TeleportService:Teleport(placeId)
+
+    for _,server in ipairs(servers) do
+        local success, err = pcall(function()
+            TeleportService:TeleportToPlaceInstance(PLACE_ID, server.id, player)
+        end)
+        
+        if success then
+            log("Erfolgreich verbunden mit Server: "..server.id)
+            return true
+        else
+            log("Fehler bei "..server.id..": "..tostring(err), true)
         end
-        return
-    else
-        warnMsg("Teleport-Fehler (Versuch "..i.."): " .. tostring(err))
+        
         task.wait(1)
     end
+    return false
 end
 
--- Finaler Fallback
-warnMsg("Alle Teleportversuche fehlgeschlagen.")
-TeleportService:Teleport(placeId)
+-- Hauptsteuerung
+local function mainCycle()
+    while isActive do
+        if os.time() > cooldown then
+            local servers = getValidServers()
+            
+            if servers and #servers > 0 then
+                if not attemptTeleport(servers) then
+                    cooldown = os.time() + CACHE_DURATION
+                end
+            else
+                log("Keine Server verfügbar - Fallback", true)
+                TeleportService:Teleport(PLACE_ID)
+                cooldown = os.time() + 10
+            end
+        end
+        
+        task.wait(5)
+    end
+end
+
+-- Start
+task.spawn(mainCycle)
+
+-- Notfall-Cleanup
+game:GetService("UserInputService").WindowFocused:Connect(function()
+    isActive = false
+    writeCache({}) -- Cache leeren
+end)
