@@ -1,4 +1,4 @@
--- ServerHop.lua (Korrigierte Version mit erweitertem Error-Handling)
+-- ServerHopper.lua (Robuste Version 2.0)
 
 -- Services
 local HttpService = game:GetService("HttpService")
@@ -9,159 +9,215 @@ local player = Players.LocalPlayer
 -- Konfiguration
 local PLACE_ID = game.PlaceId
 local CACHE_FILE = "ServerCache.txt"
+local BLACKLIST_FILE = "Blacklist.txt"
 local CACHE_DURATION = 30
 local MIN_FREE_SLOTS = 3
-local MAX_ATTEMPTS = 5
-local RETRY_DELAY = 2
+local MAX_API_ATTEMPTS = 3
+local BASE_URL = "https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100%s"
+
+-- Initialisierung
+local serverBlacklist = {}
+local lastRefresh = 0
 
 -- Hilfsfunktionen
 local function log(message, isWarning)
-    local prefix = isWarning and "WARN" or "INFO"
-    warn("["..prefix.."] ServerHop: "..message)
+    warn("["..(isWarning and "WARN" or "INFO").."] ServerHopper: "..message)
 end
 
+local function safeReadFile(filename)
+    local success, content = pcall(readfile, filename)
+    return success and content or nil
+end
+
+local function safeWriteFile(filename, content)
+    pcall(writefile, filename, content)
+end
+
+-- Blacklist Management
+local function updateBlacklist()
+    local content = safeReadFile(BLACKLIST_FILE)
+    serverBlacklist = content and HttpService:JSONDecode(content) or {}
+end
+
+local function blacklistServer(serverId)
+    serverBlacklist[serverId] = os.time() + 300 -- 5 Minuten Sperre
+    safeWriteFile(BLACKLIST_FILE, HttpService:JSONEncode(serverBlacklist))
+    log("Server geblockt: "..serverId, true)
+end
+
+-- Cache Management
 local function readCache()
-    if not pcall(function() return isfile(CACHE_FILE) end) or not isfile(CACHE_FILE) then 
-        return nil 
+    local content = safeReadFile(CACHE_FILE)
+    if not content then return nil end
+    
+    local success, data = pcall(function()
+        return HttpService:JSONDecode(content)
+    end)
+    
+    if success and data.timestamp and (os.time() - data.timestamp) < CACHE_DURATION then
+        return data.servers
     end
-    
-    local success, content = pcall(readfile, CACHE_FILE)
-    if not success then return nil end
-    
-    local lines = {}
-    for line in content:gmatch("[^\r\n]+") do
-        table.insert(lines, line)
-    end
-    
-    if #lines < 2 then return nil end
-    
-    return {
-        nextRefresh = tonumber(lines[1]),
-        servers = pcall(HttpService.JSONDecode, HttpService, lines[2]) and HttpService:JSONDecode(lines[2]) or nil
-    }
+    return nil
 end
 
+-- Korrigierte Cache-Verwaltung
 local function writeCache(servers)
+    if #servers == 0 then return end  -- Leere Serverlisten nicht speichern
+    
     local data = {
-        os.time() + CACHE_DURATION,
-        HttpService:JSONEncode(servers or {})
+        timestamp = os.time(),
+        servers = servers
     }
-    pcall(writefile, CACHE_FILE, table.concat(data, "\n"))
+    
+    -- Erweiterte Fehlerbehandlung
+    local jsonSuccess, json = pcall(function()
+        return HttpService:JSONEncode(data)
+    end)
+    
+    if jsonSuccess then
+        local fileSuccess, err = pcall(function()
+            writefile(CACHE_FILE, json)
+            log("Cache erfolgreich geschrieben: "..#servers.." Server")
+        end)
+        
+        if not fileSuccess then
+            log("Cache-Schreibfehler: "..tostring(err), true)
+        end
+    else
+        log("JSON-Kodierungsfehler: "..tostring(json), true)
+    end
 end
 
--- Serverabfrage mit verbessertem Error-Handling
+-- Serverabfrage mit Fehlerbehandlung
 local function fetchServers(cursor)
-    local url = string.format(
-        "https://games.roblox.com/v1/games/%d/servers/Public?limit=100%s",
-        PLACE_ID,
-        cursor and "&cursor="..cursor or ""
-    )
+    local url = string.format(BASE_URL, PLACE_ID, cursor and "&cursor="..cursor or "")
+    log("API-Anfrage: "..url)
     
-    for i = 1, MAX_ATTEMPTS do
+    for attempt = 1, MAX_API_ATTEMPTS do
         local success, response = pcall(function()
             return game:HttpGet(url, true)
         end)
         
         if success then
-            local decodeSuccess, decoded = pcall(function()
-                return HttpService:JSONDecode(response)
-            end)
-            
-            if decodeSuccess and type(decoded) == "table" then
+            local decoded = pcall(HttpService.JSONDecode, HttpService, response)
+            if decoded and type(decoded) == "table" then
                 return decoded
             end
         end
-        
-        task.wait(RETRY_DELAY * i)
+        task.wait(2 ^ attempt) -- Exponentielles Backoff
     end
     return nil
 end
 
-local function getValidServers()
-    local cache = readCache()
-    if cache and os.time() < cache.nextRefresh then
-        return cache.servers
-    end
-
-    local validServers = {}
-    local cursor = nil
+-- Serverfilterung
+local function filterServers(servers)
+    local valid = {}
+    updateBlacklist()
     
-    for _ = 1, 3 do
-        local data = fetchServers(cursor)
-        if not data or not data.data then
-            log("Ungültige Serverdaten erhalten", true)
-            break
-        end
-        
-        for _, server in ipairs(data.data) do
-            if server.id and server.id ~= game.JobId then
-                local playing = tonumber(server.playing) or 0
-                local capacity = tonumber(server.maxPlayers) or 0
-                
-                if not server.vipServer 
-                    and capacity > 0 
-                    and (capacity - playing) >= MIN_FREE_SLOTS 
-                then
-                    table.insert(validServers, {
-                        id = server.id,
-                        free = capacity - playing,
-                        capacity = capacity
-                    })
-                end
+    for _, server in ipairs(servers) do
+        -- Erweiterte Validierung
+        if server.id
+            and not serverBlacklist[server.id]
+            and server.id ~= game.JobId
+            and not (server.vipServer or server.accessCode)
+            and tonumber(server.playing)
+            and tonumber(server.maxPlayers)
+        then
+            local free = server.maxPlayers - server.playing
+            if free >= MIN_FREE_SLOTS then
+                table.insert(valid, {
+                    id = server.id,
+                    free = free,
+                    capacity = server.maxPlayers
+                })
             end
         end
-        
-        cursor = data.nextPageCursor or nil
-        if not cursor then break end
-        task.wait(0.5)
     end
     
-    if #validServers > 0 then
-        writeCache(validServers)
-    end
+    -- Verbesserte Sortierung
+    table.sort(valid, function(a, b)
+        return a.free > b.free  -- Sortiere nach absoluten freien Plätzen
+    end)
     
-    return validServers or {}
+    return valid
 end
 
--- Teleportlogik
-local function attemptTeleport(servers)
-    if #servers == 0 then return false end
-    
-    table.sort(servers, function(a,b)
-        return (a.free / a.capacity) > (b.free / b.capacity)
-    end)
+-- Hauptfunktion
+local function findBestServer()
+    -- Lösche alten Cache bei Neustart
+    if #readCache() or {} == 0 then
+        pcall(writefile, CACHE_FILE, "")
+    end
 
+    local allServers = {}
+    local cursor = nil
+    
+    -- Erhöhte Seitenanzahl
+    for _ = 1, 5 do  -- Maximal 5 Seiten
+        local data = fetchServers(cursor)
+        if not data or not data.data then break end
+        
+        -- Debug-Logging
+        log("Verarbeite "..#data.data.." Server von API")
+        
+        -- Füge alle Rohdaten hinzu
+        for _, server in ipairs(data.data) do
+            table.insert(allServers, server)
+        end
+        
+        cursor = data.nextPageCursor
+        if not cursor then break end
+        task.wait(0.3)
+    end
+    
+    -- Erweiterte Filterung
+    local validServers = filterServers(allServers)
+    
+    -- Schreibe nur wenn Server gefunden
+    if #validServers > 0 then
+        writeCache(validServers)
+        log("Gültige Server gefunden: "..#validServers)
+    else
+        log("Keine gültigen Server für Cache", true)
+    end
+    
+    return validServers
+end
+
+-- Teleport-System
+local function attemptTeleport()
+    local servers = findBestServer() or {}
+    
     for _, server in ipairs(servers) do
-        local success = pcall(function()
+        local success, err = pcall(function()
             TeleportService:TeleportToPlaceInstance(PLACE_ID, server.id, player)
         end)
         
         if success then
-            log("Verbunden mit Server: "..server.id)
+            log("Erfolgreich verbunden mit: "..server.id)
             return true
         else
-            log("Fehler bei Server "..server.id, true)
+            log("Fehler: "..tostring(err), true)
+            if tostring(err):find("773") then
+                blacklistServer(server.id)
+            end
         end
-        
         task.wait(1)
     end
+    
     return false
 end
 
 -- Hauptsteuerung
 while true do
-    local servers = getValidServers()
-    
-    if servers and #servers > 0 then
-        if not attemptTeleport(servers) then
-            writeCache(servers) -- Cache aktualisieren
-            task.wait(CACHE_DURATION)
+    if os.time() - lastRefresh > CACHE_DURATION then
+        lastRefresh = os.time()
+        
+        if not attemptTeleport() then
+            log("Starte Notfall-Teleport...", true)
+            pcall(TeleportService.Teleport, TeleportService, PLACE_ID)
+            task.wait(10)
         end
-    else
-        log("Keine Server verfügbar - Fallback", true)
-        pcall(TeleportService.Teleport, TeleportService, PLACE_ID)
-        task.wait(CACHE_DURATION)
     end
-    
     task.wait(5)
 end
