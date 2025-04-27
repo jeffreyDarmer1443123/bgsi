@@ -83,26 +83,38 @@ local function fetchServerList()
         if cursor then
             url = url .. "&cursor=" .. cursor
         end
+        
+        -- HTTP-Anfrage mit Fehlerbehandlung
         local ok, response = pcall(function()
-            return game:HttpGet(url)
+            return game:HttpGet(url, true)
         end)
         if not ok or not response then
             warnMsg("Fehler beim Abrufen der Serverliste (Seite "..page..")")
-            break
+            cursor = nil -- Reset cursor bei Fehlern
+            task.wait(0.5)
+            goto continue
         end
+
+        -- JSON-Verarbeitung
         local parsed = safeDecode(response)
         if not parsed or type(parsed.data) ~= "table" then
             warnMsg("Fehler beim Parsen der Serverliste (Seite "..page..")")
-            break
+            cursor = nil
+            task.wait(0.5)
+            goto continue
         end
+
+        -- Serverdaten sammeln
         for _, srv in ipairs(parsed.data) do
             table.insert(allServers, srv)
         end
-        if not parsed.nextPageCursor then
-            break
-        end
-        cursor = parsed.nextPageCursor
-        task.wait(0.3)
+
+        -- Cursor für nächste Seite
+        cursor = parsed.nextPageCursor or nil
+        if not cursor then break end
+
+        ::continue::
+        task.wait(0.3) -- Rate-Limit vermeiden
     end
 
     if #allServers > 0 then
@@ -120,19 +132,40 @@ if not servers then
     return
 end
 
--- Filter: nur Server mit >=3 freien Plätzen und nicht aktueller Job
+-- Erweiterte Filterung der Server
 local valid = {}
 for _, srv in ipairs(servers) do
     if srv.id and srv.playing and srv.maxPlayers then
+        if type(srv.playing) ~= "number" or type(srv.maxPlayers) ~= "number" then
+            continue
+        end
+        
         local freeSlots = srv.maxPlayers - srv.playing
-        if freeSlots >= 3 and srv.id ~= oldJobId then
+        if freeSlots >= 3 
+            and srv.id ~= oldJobId 
+            and srv.maxPlayers > 0 
+            and freeSlots > 0 
+        then
             table.insert(valid, { id = srv.id, free = freeSlots })
         end
     end
 end
 
+-- Fallback: Mindestanforderung senken, wenn keine Server gefunden
 if #valid == 0 then
-    warnMsg("Keine Server mit mindestens 3 freien Plätzen gefunden.")
+    for _, srv in ipairs(servers) do
+        if srv.id and srv.playing and srv.maxPlayers then
+            local freeSlots = srv.maxPlayers - srv.playing
+            if freeSlots >= 1 and srv.id ~= oldJobId then
+                table.insert(valid, { id = srv.id, free = freeSlots })
+            end
+        end
+    end
+end
+
+if #valid == 0 then
+    warnMsg("Keine geeigneten Server gefunden. Starte Fallback-Teleport...")
+    TeleportService:Teleport(placeId)
     return
 end
 
@@ -149,7 +182,7 @@ for i = 1, math.min(5, #valid) do
     end)
     if ok then
         print("🔄 Teleportiere zu neuem Server... JobID:", targetId)
-        -- Absicherung: nach 5 Sekunden prüfen, ob wir tatsächlich gewechselt haben
+        -- Absicherung: nach 5 Sekunden prüfen, ob gewechselt wurde
         task.wait(5)
         if game.JobId == oldJobId then
             warnMsg("Absicherung: Serverwechsel gescheitert, Fallback...")
@@ -162,9 +195,6 @@ for i = 1, math.min(5, #valid) do
     end
 end
 
+-- Finaler Fallback
 warnMsg("Alle Teleportversuche fehlgeschlagen.")
-pcall(function()
-    player:Kick("Server-Hop fehlgeschlagen")
-end)
-task.wait(1)
 TeleportService:Teleport(placeId)
