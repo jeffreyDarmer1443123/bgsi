@@ -1,58 +1,77 @@
-local requiredLuck = shared.requiredLuck or error("Kein Luck in requiredLuck definiert!")
+--// Verbesserte EggCheck.lua
 
-local eggNames = shared.eggNames or error("Keine EggNames in shared.eggNames definiert!")
+local HttpService = game:GetService("HttpService")
 
-local webhookUrl = shared.webhookUrl or error("Keine Webhook-URL in shared.webhookUrl definiert!")
-local foundEgg = shared.foundEgg
+-- Sicherstellen, dass shared-Variablen existieren
+local requiredLuck = shared.requiredLuck
+local eggNames = shared.eggNames
 
-local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
-	local HttpService = game:GetService("HttpService")
+local webhookUrl = shared.webhookUrl
 
-	local isManEgg = eggName:lower() == "silly"
-	local embedColor = isManEgg and 0x9B59B6 or 0x2ECC71
-	local mention = isManEgg and "<@palkins7>" or ""
-
-	local payload = {
-		content = mention,
-		embeds = {{
-			title = "🥚 Ei gefunden!",
-			color = embedColor,
-			fields = {
-				{ name = "🐣 Egg", value = eggName, inline = true },
-				{ name = "💥 Luck", value = tostring(luck), inline = true },
-				{ name = "⏳ Zeit", value = time or "N/A", inline = true },
-				{ name = "📏 Höhe", value = string.format("%.2f", height or 0), inline = true },
-			},
-			footer = {
-				text = string.format("🧭 Server: %s | Spiel: %d", jobId, placeId)
-			}
-		}}
-	}
-
-	local jsonData = HttpService:JSONEncode(payload)
-	local executor = identifyexecutor and identifyexecutor():lower() or "unknown"
-
-	local success, err = pcall(function()
-		if string.find(executor, "synapse") then
-			syn.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData })
-		elseif string.find(executor, "krnl") then
-			http.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData })
-		elseif string.find(executor, "fluxus") then
-			fluxus.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData })
-		elseif string.find(executor, "awp") then
-			request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData })
-		else
-			game:GetService("HttpService"):PostAsync(webhookUrl, jsonData)
-		end
-	end)
-
-	if not success then warn("❌ Webhook fehlgeschlagen:", err) end
+if not requiredLuck then
+    warn("⚠️ Kein Luck in shared.requiredLuck definiert!")
+    shared.eggCheckFinished = true
+    return
+end
+if not eggNames then
+    warn("⚠️ Keine EggNames in shared.eggNames definiert!")
+    shared.eggCheckFinished = true
+    return
+end
+if not webhookUrl then
+    warn("⚠️ Keine Webhook-URL in shared.webhookUrl definiert!")
+    shared.eggCheckFinished = true
+    return
 end
 
+-- Webhook Funktion
+local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
+    local isManEgg = eggName:lower() == "silly"
+    local embedColor = isManEgg and 0x9B59B6 or 0x2ECC71
+    local mention = isManEgg and "<@palkins7>" or ""
 
+    local payload = {
+        content = mention,
+        embeds = {{
+            title = "🥚 Ei gefunden!",
+            color = embedColor,
+            fields = {
+                { name = "🐣 Egg", value = eggName, inline = true },
+                { name = "💥 Luck", value = tostring(luck), inline = true },
+                { name = "⏳ Zeit", value = time or "N/A", inline = true },
+                { name = "📏 Höhe", value = string.format("%.2f", height or 0), inline = true },
+            },
+            footer = {
+                text = string.format("🧭 Server: %s | Spiel: %d", jobId, placeId)
+            }
+        }}
+    }
 
+    local jsonData = HttpService:JSONEncode(payload)
+    local executor = identifyexecutor and identifyexecutor():lower() or "unknown"
+
+    local success, err = pcall(function()
+        if string.find(executor, "synapse") then
+            syn.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData })
+        elseif string.find(executor, "krnl") then
+            http.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData })
+        elseif string.find(executor, "fluxus") then
+            fluxus.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData })
+        elseif string.find(executor, "awp") then
+            request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData })
+        else
+            HttpService:PostAsync(webhookUrl, jsonData)
+        end
+    end)
+
+    if not success then
+        warn("❌ Webhook fehlgeschlagen:", err)
+    end
+end
+
+-- Hilfsfunktion: Luck und Timer aus Egg lesen
 local function getEggStats(eggFolder)
-    local gui = eggFolder:FindFirstChild("Display"):FindFirstChildWhichIsA("SurfaceGui")
+    local gui = eggFolder:FindFirstChild("Display") and eggFolder.Display:FindFirstChildWhichIsA("SurfaceGui")
     if not gui then return nil, nil end
 
     local luckText = gui:FindFirstChild("Icon") and gui.Icon:FindFirstChild("Luck")
@@ -63,10 +82,12 @@ local function getEggStats(eggFolder)
     return luckValue, timeText
 end
 
-
+-- Suche nach Eggs
 local rifts = workspace:FindFirstChild("Rendered") and workspace.Rendered:FindFirstChild("Rifts")
 if not rifts then
-    error("Ordner Workspace.Rendered.Rifts nicht gefunden.")
+    warn("❌ Ordner Workspace.Rendered.Rifts nicht gefunden.")
+    shared.eggCheckFinished = true
+    return
 end
 
 local manEgg = rifts:FindFirstChild("silly")
@@ -83,18 +104,21 @@ else
     print("ℹ️ Kein 'silly' gefunden.")
 end
 
+-- Suche nach passenden Eiern
 local candidates = {}
 for _, eggFolder in ipairs(rifts:GetChildren()) do
     if eggFolder.Name ~= "silly" and table.find(eggNames, eggFolder.Name) then
         table.insert(candidates, eggFolder)
     end
 end
+
 if #candidates == 0 then
-    error(("❌ Kein Egg mit den Namen %s gefunden."):format(table.concat(eggNames, ", ")))
+    warn(("❌ Kein Egg mit den Namen %s gefunden."):format(table.concat(eggNames, ", ")))
     shared.eggCheckFinished = true
     return
 end
 
+-- Bester Egg mit höchstem Luck
 local bestEgg, bestLuck, bestTime
 for _, ef in ipairs(candidates) do
     local luck, timeText = getEggStats(ef)
@@ -104,11 +128,14 @@ for _, ef in ipairs(candidates) do
         bestTime = timeText
     end
 end
+
 if not bestEgg then
-    error(("❌ Luck-Wert für Eggs %s konnte nicht ermittelt werden."):format(table.concat(eggNames, ", ")))
+    warn(("❌ Luck-Wert für Eggs %s konnte nicht ermittelt werden."):format(table.concat(eggNames, ", ")))
+    shared.eggCheckFinished = true
     return
 end
 
+-- Ausgabe + Webhook
 local yInfo = ""
 local outputPart = bestEgg:FindFirstChild("Output")
 if outputPart and outputPart:IsA("BasePart") then
@@ -121,9 +148,10 @@ local comp = ok and "≥" or "<"
 local timeInfo = bestTime and (" | Zeit übrig: " .. bestTime) or ""
 local message = ("%s '%s': Luck %d %s %d%s%s")
     :format(icon, bestEgg.Name, bestLuck, comp, requiredLuck, timeInfo, yInfo)
+
 if ok then
     print(message)
-    print("📡 DEBUG: Sende Webhook jetzt...")
+    print("📡 Sende Webhook...")
 
     sendWebhookEmbed(
         bestEgg.Name,
@@ -134,12 +162,10 @@ if ok then
         game.PlaceId
     )
 
-    print("✅ DEBUG: sendWebhookEmbed wurde aufgerufen.")
-    
-    -- <<< Richtige Flags setzen
     shared.foundEgg = true
     shared.eggCheckFinished = true
-
+    print("✅ Egg gefunden und gemeldet!")
 else
-    error(message)
+    warn(message)
+    shared.eggCheckFinished = true
 end
