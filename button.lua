@@ -13,17 +13,38 @@ local function createHopButton()
     -- ScreenGui erstellen
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "ServerHopGui"
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     screenGui.Parent = game:GetService("CoreGui")
 
     -- Button erstellen
     local button = Instance.new("TextButton")
-    button.Size = UDim2.new(0, 200, 0, 50)
-    button.Position = UDim2.new(0, 10, 0, 10)
-    button.Text = "🌐 Server Hop!"
-    button.BackgroundColor3 = Color3.fromRGB(50, 150, 255)
-    button.TextColor3 = Color3.new(1,1,1)
+    button.Size = UDim2.new(0, 160, 0, 40)
+    button.Position = UDim2.new(1, -180, 0, 20) -- Rechts oben (20px Abstand von oben/rechts)
+    button.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    button.BorderSizePixel = 0
+    button.AutoButtonColor = false
+    button.Text = "🌐 Server Hop"
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
     button.TextScaled = true
+    button.Font = Enum.Font.GothamBold
     button.Parent = screenGui
+
+    -- Abgerundete Ecken
+    local uicorner = Instance.new("UICorner")
+    uicorner.CornerRadius = UDim.new(0, 8)
+    uicorner.Parent = button
+
+    -- Hover-Effekt
+    local function onHover()
+        button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    end
+
+    local function onUnhover()
+        button.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    end
+
+    button.MouseEnter:Connect(onHover)
+    button.MouseLeave:Connect(onUnhover)
 
     -- Klick-Funktion
     button.MouseButton1Click:Connect(function()
