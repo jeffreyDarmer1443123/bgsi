@@ -11,6 +11,7 @@ local Players = game:GetService("Players")
 
 local gameId = 85896571713843 -- Game ID hier eintragen
 local baseUrl = "https://games.roblox.com/v1/games/" .. gameId .. "/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100"
+local PLACE_ID = game.PlaceId
 
 local serverFile = "server_ids.txt"
 local cooldownFile = "server_refresh_time.txt"
@@ -58,8 +59,10 @@ local function refreshServerIds()
             local data = HttpService:JSONDecode(body)
 
             for _, server in ipairs(data.data) do
-                if not server.vipServerId and #allServerIds < 200 then -- ❗ Sicherstellen, dass es KEIN Private Server ist
+                if #allServerIds < 200 then
                     table.insert(allServerIds, server.id)
+                else
+                    break
                 end
             end
 
@@ -73,10 +76,6 @@ local function refreshServerIds()
         else
             break
         end
-    end
-
-    if #allServerIds == 0 then
-        error("❗ Keine gültigen öffentlichen Server gefunden.")
     end
 
     -- Speichern der IDs
@@ -104,26 +103,8 @@ local function loadServerIds()
     return ids
 end
 
--- Funktion für sicheren Teleport
-local function safeTeleport(placeId, serverId)
-    local success, result = pcall(function()
-        return TeleportService:TeleportToPlaceInstance(placeId, serverId, Players.LocalPlayer)
-    end)
-
-    if not success then
-        warn("❗ Teleport fehlgeschlagen: " .. tostring(result))
-        -- Optional: Erneuter Versuch oder anderer Server
-        wait(2)
-        print("🔁 Neuer Versuch...")
-        main(true) -- Rekursiver Aufruf: Versucht erneut mit einem neuen Server
-    else
-        print("✅ Teleport erfolgreich gestartet.")
-    end
-end
-
 -- Hauptlogik starten
-function main(isRetry)
-    isRetry = isRetry or false
+local function main()
     -- Prüfen ob Refresh notwendig ist
     local needRefresh = true
 
@@ -134,7 +115,7 @@ function main(isRetry)
         end
     end
 
-    if needRefresh and not isRetry then
+    if needRefresh then
         refreshServerIds()
     end
 
@@ -156,7 +137,11 @@ function main(isRetry)
 
     -- Jetzt hoppen!
     print("🚀 Hoppe zu Server: " .. serverId)
-    safeTeleport(gameId, serverId)
+    TeleportService:TeleportToPlaceInstance(gameId, serverId, Players.LocalPlayer)
+    wait(5)
+    local serverIdNow = game.PlaceId
+    if serverId == serverIdNow then
+        TeleportService:Teleport(PlaceID)
 end
 
 -- Script starten
