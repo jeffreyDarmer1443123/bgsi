@@ -15,7 +15,9 @@ local PLACE_ID = game.PlaceId
 
 local serverFile = "server_ids.txt"
 local cooldownFile = "server_refresh_time.txt"
-local refreshCooldown = 60 -- in Sekunden (10 Minuten bevor neue Server geladen werden)
+local refreshCooldown = 60 -- in Sekunden
+
+local maxAttempts = 5 -- ❗ Maximal 5 Server probieren
 
 -- Funktion, die einen HTTP-Request mit Retry-Logik ausführt
 local function fetchWithRetry(url)
@@ -59,10 +61,8 @@ local function refreshServerIds()
             local data = HttpService:JSONDecode(body)
 
             for _, server in ipairs(data.data) do
-                if #allServerIds < 200 then
+                if not server.vipServerId and #allServerIds < 200 then
                     table.insert(allServerIds, server.id)
-                else
-                    break
                 end
             end
 
@@ -76,6 +76,10 @@ local function refreshServerIds()
         else
             break
         end
+    end
+
+    if #allServerIds == 0 then
+        error("❗ Keine gültigen öffentlichen Server gefunden.")
     end
 
     -- Speichern der IDs
@@ -103,9 +107,48 @@ local function loadServerIds()
     return ids
 end
 
+-- Server-Hopping mit mehreren Versuchen
+local function tryHopServers(serverIds)
+    local attempts = 0
+    local initialServer = game.JobId
+
+    while #serverIds > 0 and attempts < maxAttempts do
+        attempts = attempts + 1
+
+        local randomIndex = math.random(1, #serverIds)
+        local serverId = serverIds[randomIndex]
+
+        -- Server aus Liste entfernen
+        table.remove(serverIds, randomIndex)
+        writefile(serverFile, table.concat(serverIds, "\n"))
+
+        -- Teleport Versuch
+        print("🚀 Versuch #" .. attempts .. ": Hüpfe zu Server " .. serverId)
+        local success, err = pcall(function()
+            TeleportService:TeleportToPlaceInstance(gameId, serverId, Players.LocalPlayer)
+        end)
+
+        if not success then
+            warn("❗ Fehler beim Teleportieren: " .. tostring(err))
+            wait(2)
+        else
+            -- Warten und prüfen ob wirklich gewechselt wurde
+            wait(8) -- etwas länger warten wegen Latenz
+            if game.JobId ~= initialServer then
+                print("✅ Erfolgreich neuen Server betreten!")
+                return
+            else
+                warn("❗ Immer noch auf gleichem Server, neuer Versuch...")
+                wait(2)
+            end
+        end
+    end
+
+    warn("❗ Maximalversuche erreicht. Kein funktionierender Server gefunden.")
+end
+
 -- Hauptlogik starten
 local function main()
-    -- Prüfen ob Refresh notwendig ist
     local needRefresh = true
 
     if isfile(cooldownFile) then
@@ -126,22 +169,7 @@ local function main()
         return
     end
 
-    -- Zufällige Server-ID wählen
-    local randomIndex = math.random(1, #serverIds)
-    local serverId = serverIds[randomIndex]
-
-    -- Server-ID aus Liste entfernen und neu speichern (damit nicht 2x gehüpft wird)
-    table.remove(serverIds, randomIndex)
-    local updatedContent = table.concat(serverIds, "\n")
-    writefile(serverFile, updatedContent)
-
-    -- Jetzt hoppen!
-    print("🚀 Hoppe zu Server: " .. serverId)
-    TeleportService:TeleportToPlaceInstance(gameId, serverId, Players.LocalPlayer)
-    wait(5)
-    local serverIdNow = game.PlaceId
-    if serverId == serverIdNow then
-        TeleportService:Teleport(PLACE_ID)
+    tryHopServers(serverIds)
 end
 
 -- Script starten
