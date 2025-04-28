@@ -58,10 +58,8 @@ local function refreshServerIds()
             local data = HttpService:JSONDecode(body)
 
             for _, server in ipairs(data.data) do
-                if #allServerIds < 200 then
+                if not server.vipServerId and #allServerIds < 200 then -- ❗ Sicherstellen, dass es KEIN Private Server ist
                     table.insert(allServerIds, server.id)
-                else
-                    break
                 end
             end
 
@@ -75,6 +73,10 @@ local function refreshServerIds()
         else
             break
         end
+    end
+
+    if #allServerIds == 0 then
+        error("❗ Keine gültigen öffentlichen Server gefunden.")
     end
 
     -- Speichern der IDs
@@ -102,8 +104,26 @@ local function loadServerIds()
     return ids
 end
 
+-- Funktion für sicheren Teleport
+local function safeTeleport(placeId, serverId)
+    local success, result = pcall(function()
+        return TeleportService:TeleportToPlaceInstance(placeId, serverId, Players.LocalPlayer)
+    end)
+
+    if not success then
+        warn("❗ Teleport fehlgeschlagen: " .. tostring(result))
+        -- Optional: Erneuter Versuch oder anderer Server
+        wait(2)
+        print("🔁 Neuer Versuch...")
+        main(true) -- Rekursiver Aufruf: Versucht erneut mit einem neuen Server
+    else
+        print("✅ Teleport erfolgreich gestartet.")
+    end
+end
+
 -- Hauptlogik starten
-local function main()
+function main(isRetry)
+    isRetry = isRetry or false
     -- Prüfen ob Refresh notwendig ist
     local needRefresh = true
 
@@ -114,7 +134,7 @@ local function main()
         end
     end
 
-    if needRefresh then
+    if needRefresh and not isRetry then
         refreshServerIds()
     end
 
@@ -136,7 +156,7 @@ local function main()
 
     -- Jetzt hoppen!
     print("🚀 Hoppe zu Server: " .. serverId)
-    TeleportService:TeleportToPlaceInstance(gameId, serverId, Players.LocalPlayer)
+    safeTeleport(gameId, serverId)
 end
 
 -- Script starten
