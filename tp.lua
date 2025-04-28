@@ -141,7 +141,7 @@ local function main()
     wait(5)
     local serverIdNow = game.PlaceId
     if serverId == serverIdNow then
-        TeleportService:Teleport(PlaceID)
+        TeleportService:Teleport(Place_ID)
 end
 
 -- Script starten
