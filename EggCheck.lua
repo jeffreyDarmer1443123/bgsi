@@ -142,7 +142,7 @@ if outputPart and outputPart:IsA("BasePart") then
     yInfo = (" | Y=%.2f"):format(outputPart.Position.Y)
 end
 
-local ok = bestLuck >= requiredLuck
+local ok = bestLuck >= requiredLuck and bestTime >= shared.minTime
 local icon = ok and "✅" or "❌"
 local comp = ok and "≥" or "<"
 local timeInfo = bestTime and (" | Zeit übrig: " .. bestTime) or ""
