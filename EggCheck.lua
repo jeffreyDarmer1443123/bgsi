@@ -142,7 +142,20 @@ if outputPart and outputPart:IsA("BasePart") then
     yInfo = (" | Y=%.2f"):format(outputPart.Position.Y)
 end
 
-local ok = bestLuck >= requiredLuck and bestTime >= shared.minTime
+local function parseTimeString(text)
+    if not text then return nil end
+    local minutes, seconds = text:match("^(%d+):(%d+)$")
+    if minutes and seconds then
+        return tonumber(minutes) * 60 + tonumber(seconds)
+    end
+    local n = tonumber(text)
+    if n then return n end
+    return nil
+end
+
+
+local numericTime = parseTimeString(bestTime)
+local ok = bestLuck >= requiredLuck and numericTime and numericTime >= shared.minTime
 local icon = ok and "✅" or "❌"
 local comp = ok and "≥" or "<"
 local timeInfo = bestTime and (" | Zeit übrig: " .. bestTime) or ""
