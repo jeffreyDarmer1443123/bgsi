@@ -24,12 +24,14 @@ if not webhookUrl then
     return
 end
 
+-- Webhook Funktion
+-- Anpassen der sendWebhookEmbed-Funktion
 local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
     local isManEgg   = eggName:lower() == "silly-egg"
     local embedColor = isManEgg and 0x9B59B6 or 0x2ECC71
     local mention    = isManEgg and "<@palkins7>" or ""
 
-    -- Protokoll-Link, der den Roblox-Client direkt mit PlaceId+JobId startet
+    -- Statt games/start nun home?placeID&gameID
     local serverLink = ("roblox://experiences/start?placeId=%d&gameInstanceId=%s")
                         :format(placeId, jobId)
 
@@ -37,14 +39,14 @@ local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
         content = mention,
         embeds = {{
             title = "🥚 Ei gefunden!",
-            url   = serverLink,      -- klickbarer Titel startet Roblox direkt
+            url   = serverLink,      -- klickbarer Titel
             color = embedColor,
             fields = {
                 { name = "🐣 Egg",         value = eggName,       inline = true },
                 { name = "💥 Luck",        value = tostring(luck), inline = true },
-                { name = "⏳ Zeit",        value = time or "N/A",  inline = true },
+                { name = "⏳ Zeit",        value = time or "N/A", inline = true },
                 { name = "📏 Höhe",        value = string.format("%.2f", height or 0), inline = true },
-                { name = "🔗 Server Link", value = serverLink,     inline = false },
+                { name = "🔗 Server Link", value = serverLink,    inline = false },
             },
             footer = {
                 text = string.format("🧭 Server: %s | Spiel: %d", jobId, placeId)
@@ -56,13 +58,13 @@ local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
     local executor = identifyexecutor and identifyexecutor():lower() or "unknown"
 
     local success, err = pcall(function()
-        if executor:find("synapse") then
+        if string.find(executor, "synapse") then
             syn.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
-        elseif executor:find("krnl") then
+        elseif string.find(executor, "krnl") then
             http.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
-        elseif executor:find("fluxus") then
+        elseif string.find(executor, "fluxus") then
             fluxus.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
-        elseif executor:find("awp") then
+        elseif string.find(executor, "awp") then
             request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
         else
             HttpService:PostAsync(webhookUrl, jsonData)
