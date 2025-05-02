@@ -1,3 +1,5 @@
+math.randomseed(os.time())  -- Seed für Zufallszahlengenerator
+
 -- Kompatibilität für verschiedene Exploiter
 local req = (syn and syn.request) or (http and http.request) or (request) or (fluxus and fluxus.request)
 
@@ -115,15 +117,16 @@ local function tryHopServers(serverIds)
     while #serverIds > 0 and attempts < maxAttempts do
         attempts = attempts + 1
 
+        -- Zufälligen Index wählen
         local randomIndex = math.random(1, #serverIds)
-        local serverId = serverIds[randomIndex]
+        local serverId    = serverIds[randomIndex]
 
-        -- Server aus Liste entfernen
+        -- ServerID aus der Liste entfernen
         table.remove(serverIds, randomIndex)
         writefile(serverFile, table.concat(serverIds, "\n"))
 
-        -- Teleport Versuch
-        print("🚀 Versuch #" .. attempts .. ": Hüpfe zu Server " .. serverId)
+        -- Teleport-Versuch
+        print("🚀 Versuch #" .. attempts .. ": Hüpfe zu zufälligem Server " .. serverId)
         local success, err = pcall(function()
             TeleportService:TeleportToPlaceInstance(gameId, serverId, Players.LocalPlayer)
         end)
@@ -132,20 +135,21 @@ local function tryHopServers(serverIds)
             warn("❗ Fehler beim Teleportieren: " .. tostring(err))
             wait(2)
         else
-            -- Warten und prüfen ob wirklich gewechselt wurde
-            wait(8) -- etwas länger warten wegen Latenz
+            -- Warte kurz, dann prüfen
+            wait(8)
             if game.JobId ~= initialServer then
-                print("✅ Erfolgreich neuen Server betreten!")
+                print("✅ Erfolgreich neuen Server betreten: " .. serverId)
                 return
             else
-                warn("❗ Immer noch auf gleichem Server, neuer Versuch...")
+                warn("❗ Immer noch auf demselben Server, versuche erneut...")
                 wait(2)
             end
         end
     end
 
-    warn("❗ Maximalversuche erreicht. Kein funktionierender Server gefunden.")
+    warn("❗ Maximalversuche erreicht. Kein neuer Server gefunden.")
 end
+
 
 -- Hauptlogik starten
 local function main()
