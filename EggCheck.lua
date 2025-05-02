@@ -56,7 +56,7 @@ local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
     local executor = identifyexecutor and identifyexecutor():lower() or "unknown"
 
     local success, err = pcall(function()
-        if executor:find("AWP") then
+        if executor:find("awp") then
             request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
         else
             HttpService:PostAsync(webhookUrl, jsonData)
