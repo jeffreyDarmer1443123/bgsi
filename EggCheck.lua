@@ -244,6 +244,10 @@ if ok then
     shared.lastEggName = bestEgg.Name
     shared.lastEggLuck = bestLuck
     shared.statusText = "✅ Ei gefunden!"
+    shared.stats.attempts += 1
+    shared.stats.foundCount += 1
+    table.insert(shared.stats.log, os.date("[%H:%M:%S]") .. " ✔️ FOUND: " .. bestEgg.Name .. " | Luck: " .. bestLuck)
+
 
 
     shared.foundEgg = true
@@ -253,6 +257,9 @@ else
     shared.lastEggName = bestEgg.Name
     shared.lastEggLuck = bestLuck
     shared.statusText = "❌ Nicht gut genug. Hüpfe weiter..."
+    shared.stats.attempts += 1
+    table.insert(shared.stats.log, os.date("[%H:%M:%S]") .. " ❌ SKIPPED: " .. bestEgg.Name .. " | Luck: " .. bestLuck)
+
 
     warn(message)
     shared.eggCheckFinished = true
