@@ -45,7 +45,7 @@ local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
                 { name = "💥 Luck",        value = tostring(luck), inline = true },
                 { name = "⏳ Zeit",        value = time or "N/A", inline = true },
                 { name = "📏 Höhe",        value = string.format("%.2f", height or 0), inline = true },
-                { name = "🔗 Server Link", value = "[Join Link](" + serverLink + ")",    inline = false },
+                { name = "🔗 Server Link", value = "[Join Link](" .. serverLink .. ")",    inline = false },
             }
         }}
     }
