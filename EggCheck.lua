@@ -217,7 +217,6 @@ playFoundSound()
 
 
 local numericTime = parseTimeString(bestTime)
-print(numericTime, shared.minTime)
 local ok = bestLuck >= requiredLuck and numericTime and numericTime >= shared.minTime
 local icon = ok and "✅" or "❌"
 local comp = ok and "≥" or "<"
