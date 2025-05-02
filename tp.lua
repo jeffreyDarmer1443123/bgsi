@@ -136,11 +136,6 @@ local function safeTeleportToInstance(placeId, jobId, player)
         warn("❗ TeleportToPlaceInstance fehlgeschlagen: " .. tostring(err))
     end
     return ok, err
-end)
-    if not ok then
-        warn("❗ TeleportToPlaceInstance fehlgeschlagen: " .. tostring(err))
-    end
-    return ok, err
 end
 
 -- Hoppt zufällig durch bis Erfolg
