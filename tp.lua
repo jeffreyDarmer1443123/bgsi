@@ -127,10 +127,16 @@ local function loadServerIds()
 end
 
 -- Pcall-geschützter Teleport-Aufruf, übergibt UserId-Array
+-- Pcall-geschützter Teleport-Aufruf, übergibt Player-Objekt in Tabelle
 local function safeTeleportToInstance(placeId, jobId, player)
     local ok, err = pcall(function()
-        TeleportService:TeleportToPlaceInstance(placeId, jobId, { player.UserId })
+        TeleportService:TeleportToPlaceInstance(placeId, jobId, { player })
     end)
+    if not ok then
+        warn("❗ TeleportToPlaceInstance fehlgeschlagen: " .. tostring(err))
+    end
+    return ok, err
+end)
     if not ok then
         warn("❗ TeleportToPlaceInstance fehlgeschlagen: " .. tostring(err))
     end
