@@ -25,91 +25,74 @@ if not webhookUrl then
 end
 
 -- Versucht nacheinander alle gängigen HTTP-Funktionen in einer pcall-Hülle
-local function safeRequest(requestArgs)
+local function safeRequest(opts)
     local methods = {}
-
-    -- synapse
-    if syn and syn.request then
-        table.insert(methods, syn.request)
-    end
-    -- fluxus
-    if fluxus and fluxus.request then
-        table.insert(methods, fluxus.request)
-    end
-    -- http.request
-    if http and http.request then
-        table.insert(methods, http.request)
-    end
-    -- global request (AWP)
-    if request then
-        table.insert(methods, request)
-    end
-    -- raw http_request (manchmal AWP/older)
-    if http_request then
-        table.insert(methods, http_request)
-    end
-    -- als Fallback HttpService:RequestAsync
-    table.insert(methods, function(opts)
+    if syn and syn.request then table.insert(methods, syn.request) end
+    if fluxus and fluxus.request then table.insert(methods, fluxus.request) end
+    if http and http.request then table.insert(methods, http.request) end
+    if request then table.insert(methods, request) end
+    if http_request then table.insert(methods, http_request) end
+    -- Fallback HttpService
+    table.insert(methods, function(o)
         return HttpService:RequestAsync({
-            Url     = opts.Url,
-            Method  = opts.Method,
-            Headers = opts.Headers,
-            Body    = opts.Body,
+            Url     = o.Url,
+            Method  = o.Method,
+            Headers = o.Headers,
+            Body    = o.Body,
         })
     end)
 
-    -- Probiere jede Methode
     for _, fn in ipairs(methods) do
-        local ok, res = pcall(fn, requestArgs)
-        if ok and res then
-            -- Bei Discord Webhook: StatusCode 204 ist auch OK, 200/201/204
+        local ok, res = pcall(fn, opts)
+        if ok and type(res) == "table" then
             local code = res.StatusCode or res.code or 0
-            if res.Success or code >= 200 and code < 300 then
+            if (res.Success ~= false) and (code >= 200 and code < 300) then
                 return true, res
             end
         end
     end
-
-    return false, "Kein einziger HTTP-Call hat funktioniert."
+    return false, "Kein HTTP-Call hat erfolgreich geantwortet"
 end
-
 
 -- Webhook Funktion
 -- Anpassen der sendWebhookEmbed-Funktion
-local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
-    local isManEgg   = eggName:lower() == "silly-egg"
-    local embedColor = isManEgg and 0x9B59B6 or 0x2ECC71
-    local mention    = isManEgg and "<@palkins7>" or ""
+local function sendWebhookEmbed(eggName, luck, timeText, height, jobId, placeId)
+    local isSilly = (eggName:lower() == "silly-egg")
+    local color   = isSilly and 0x9B59B6 or 0x2ECC71
+    local mention = isSilly and "<@palkins7>" or ""
 
-    -- Statt games/start nun home?placeID&gameID
     local serverLink = ("https://jeffreydarmer1443123.github.io/?placeId=%d&gameInstanceId=%s")
-                        :format(placeId, jobId)
+                      :format(placeId, jobId)
 
     local payload = {
         content = mention,
-        embeds = {{
-            title = "🥚 Ei gefunden!",
-            color = embedColor,
+        embeds  = {{
+            title  = "🥚 Ei gefunden!",
+            color  = color,
             fields = {
-                { name = "🐣 Egg",         value = eggName,       inline = true },
-                { name = "💥 Luck",        value = tostring(luck), inline = true },
-                { name = "⏳ Zeit",        value = time or "N/A", inline = true },
-                { name = "📏 Höhe",        value = string.format("%.2f", height or 0), inline = true },
-                { name = "🔗 Server Link", value = "[Join Link](" .. serverLink .. ")",    inline = false },
-            }
-        }}
+                { name = "🐣 Egg",  value = eggName,       inline = true },
+                { name = "💥 Luck", value = tostring(luck), inline = true },
+                { name = "⏳ Zeit", value = timeText or "N/A", inline = true },
+                { name = "📏 Höhe", value = string.format("%.2f", height), inline = true },
+                { name = "🔗 Server Link",
+                  value = "[Join Link](" .. serverLink .. ")", inline = false },
+            },
+        }},
     }
 
     local jsonData = HttpService:JSONEncode(payload)
-    local executor = identifyexecutor and identifyexecutor():lower() or "unknown"
+    local requestArgs = {
+        Url     = webhookUrl,
+        Method  = "POST",
+        Headers = { ["Content-Type"] = "application/json" },
+        Body    = jsonData,
+    }
 
-    local success, res = safeRequest(args)
-
+    local success, res = safeRequest(requestArgs)
     if not success then
-        warn("❌ Webhook fehlgeschlagen:", err)
+        warn("❌ Webhook fehlgeschlagen: " .. tostring(res))
     end
 end
-
 
 -- Hilfsfunktion: Luck und Timer aus Egg lesen
 local function getEggStats(eggFolder)
