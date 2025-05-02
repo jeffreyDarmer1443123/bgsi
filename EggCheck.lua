@@ -25,21 +25,28 @@ if not webhookUrl then
 end
 
 -- Webhook Funktion
+-- Anpassen der sendWebhookEmbed-Funktion
 local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
-    local isManEgg = eggName:lower() == "silly-egg"
-    local embedColor = isManEgg and 0x9B59B6 or 0x2ECC71
-    local mention = isManEgg and "<@palkins7>" or ""
+    local isManEgg    = eggName:lower() == "silly-egg"
+    local embedColor  = isManEgg and 0x9B59B6 or 0x2ECC71
+    local mention     = isManEgg and "<@palkins7>" or ""
+
+    -- Neuer Deep-Link zum Server
+    local serverLink = ("https://www.roblox.com/games/start?placeId=%d&jobId=%s")
+                        :format(placeId, jobId)
 
     local payload = {
         content = mention,
         embeds = {{
             title = "🥚 Ei gefunden!",
+            url   = serverLink,      -- macht den Titel zum klickbaren Link
             color = embedColor,
             fields = {
-                { name = "🐣 Egg", value = eggName, inline = true },
-                { name = "💥 Luck", value = tostring(luck), inline = true },
-                { name = "⏳ Zeit", value = time or "N/A", inline = true },
-                { name = "📏 Höhe", value = string.format("%.2f", height or 0), inline = true },
+                { name = "🐣 Egg",         value = eggName,  inline = true },
+                { name = "💥 Luck",        value = tostring(luck), inline = true },
+                { name = "⏳ Zeit",        value = time or "N/A",   inline = true },
+                { name = "📏 Höhe",        value = string.format("%.2f", height or 0), inline = true },
+                { name = "🔗 Server Link", value = serverLink,    inline = false },  -- neues Feld
             },
             footer = {
                 text = string.format("🧭 Server: %s | Spiel: %d", jobId, placeId)
@@ -52,13 +59,13 @@ local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
 
     local success, err = pcall(function()
         if string.find(executor, "synapse") then
-            syn.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData })
+            syn.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
         elseif string.find(executor, "krnl") then
-            http.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData })
+            http.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
         elseif string.find(executor, "fluxus") then
-            fluxus.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData })
+            fluxus.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
         elseif string.find(executor, "awp") then
-            request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData })
+            request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
         else
             HttpService:PostAsync(webhookUrl, jsonData)
         end
@@ -68,6 +75,7 @@ local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
         warn("❌ Webhook fehlgeschlagen:", err)
     end
 end
+
 
 -- Hilfsfunktion: Luck und Timer aus Egg lesen
 local function getEggStats(eggFolder)
