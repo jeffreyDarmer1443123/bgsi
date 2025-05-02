@@ -27,26 +27,26 @@ end
 -- Webhook Funktion
 -- Anpassen der sendWebhookEmbed-Funktion
 local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
-    local isManEgg    = eggName:lower() == "silly-egg"
-    local embedColor  = isManEgg and 0x9B59B6 or 0x2ECC71
-    local mention     = isManEgg and "<@palkins7>" or ""
+    local isManEgg   = eggName:lower() == "silly-egg"
+    local embedColor = isManEgg and 0x9B59B6 or 0x2ECC71
+    local mention    = isManEgg and "<@palkins7>" or ""
 
-    -- Neuer Deep-Link zum Server
-    local serverLink = ("https://www.roblox.com/games/start?placeId=%d&jobId=%s")
+    -- Statt games/start nun home?placeID&gameID
+    local serverLink = ("https://www.roblox.com/home?placeID=%d&gameID=%s")
                         :format(placeId, jobId)
 
     local payload = {
         content = mention,
         embeds = {{
             title = "🥚 Ei gefunden!",
-            url   = serverLink,      -- macht den Titel zum klickbaren Link
+            url   = serverLink,      -- klickbarer Titel
             color = embedColor,
             fields = {
-                { name = "🐣 Egg",         value = eggName,  inline = true },
+                { name = "🐣 Egg",         value = eggName,       inline = true },
                 { name = "💥 Luck",        value = tostring(luck), inline = true },
-                { name = "⏳ Zeit",        value = time or "N/A",   inline = true },
+                { name = "⏳ Zeit",        value = time or "N/A", inline = true },
                 { name = "📏 Höhe",        value = string.format("%.2f", height or 0), inline = true },
-                { name = "🔗 Server Link", value = serverLink,    inline = false },  -- neues Feld
+                { name = "🔗 Server Link", value = serverLink,    inline = false },
             },
             footer = {
                 text = string.format("🧭 Server: %s | Spiel: %d", jobId, placeId)
