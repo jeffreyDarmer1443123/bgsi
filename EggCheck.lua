@@ -180,44 +180,6 @@ local function parseTimeString(text)
     return nil
 end
 
-
-local function showFoundGui(message)
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "EggFoundGui"
-    screenGui.ResetOnSpawn = false
-    screenGui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
-
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.6, 0, 0.15, 0)
-    label.Position = UDim2.new(0.2, 0, 0.4, 0)
-    label.BackgroundColor3 = Color3.fromRGB(50, 205, 50)
-    label.TextColor3 = Color3.new(1, 1, 1)
-    label.TextStrokeTransparency = 0
-    label.Font = Enum.Font.SourceSansBold
-    label.TextScaled = true
-    label.Text = message
-    label.Parent = screenGui
-
-    game.Debris:AddItem(screenGui, 5)
-end
-
-showFoundGui(("🥚 Ei gefunden: %s | Luck: %d"):format(bestEgg.Name, bestLuck))
-
--- Sound abspielen beim Fund
-local function playFoundSound()
-    local sound = Instance.new("Sound")
-    sound.SoundId = "rbxassetid://9118823104" -- Beispiel: Zelda-Truhe Sound
-    sound.Volume = 1
-    sound.Name = "EggFoundSound"
-    sound.Parent = workspace
-    sound:Play()
-    
-    game.Debris:AddItem(sound, 5) -- automatisch entfernen
-end
-
-playFoundSound()
-
-
 local numericTime = parseTimeString(bestTime)
 local ok = bestLuck >= requiredLuck and numericTime and numericTime >= shared.minTime
 local icon = ok and "✅" or "❌"
@@ -239,30 +201,10 @@ if ok then
         game.PlaceId
     )
 
-    -- 🎧 Sound + 🖼 GUI
-    playFoundSound()
-    showFoundGui(("🥚 Ei gefunden: %s | Luck: %d"):format(bestEgg.Name, bestLuck))
-
-    shared.lastEggName = bestEgg.Name
-    shared.lastEggLuck = bestLuck
-    shared.statusText = "✅ Ei gefunden!"
-    shared.stats.attempts += 1
-    shared.stats.foundCount += 1
-    table.insert(shared.stats.log, os.date("[%H:%M:%S]") .. " ✔️ FOUND: " .. bestEgg.Name .. " | Luck: " .. bestLuck)
-
-
-
     shared.foundEgg = true
     shared.eggCheckFinished = true
     print("✅ Egg gefunden und gemeldet!")
 else
-    shared.lastEggName = bestEgg.Name
-    shared.lastEggLuck = bestLuck
-    shared.statusText = "❌ Nicht gut genug. Hüpfe weiter..."
-    shared.stats.attempts += 1
-    table.insert(shared.stats.log, os.date("[%H:%M:%S]") .. " ❌ SKIPPED: " .. bestEgg.Name .. " | Luck: " .. bestLuck)
-
-
     warn(message)
     shared.eggCheckFinished = true
 end
