@@ -24,14 +24,12 @@ if not webhookUrl then
     return
 end
 
--- Webhook Funktion
--- Anpassen der sendWebhookEmbed-Funktion
+-- Webhook-Funktion mit Server-Link
 local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
-    local isManEgg    = eggName:lower() == "silly-egg"
-    local embedColor  = isManEgg and 0x9B59B6 or 0x2ECC71
-    local mention     = isManEgg and "<@palkins7>" or ""
-
-    -- Neuer Deep-Link zum Server
+    local isManEgg   = eggName:lower() == "silly-egg"
+    local embedColor = isManEgg and 0x9B59B6 or 0x2ECC71
+    local mention    = isManEgg and "<@palkins7>" or ""
+    -- Deep-Link zum aktuellen Server
     local serverLink = ("https://www.roblox.com/games/start?placeId=%d&jobId=%s")
                         :format(placeId, jobId)
 
@@ -39,14 +37,14 @@ local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
         content = mention,
         embeds = {{
             title = "🥚 Ei gefunden!",
-            url   = serverLink,      -- macht den Titel zum klickbaren Link
+            url   = serverLink,      -- klickbarer Titel
             color = embedColor,
             fields = {
-                { name = "🐣 Egg",         value = eggName,  inline = true },
-                { name = "💥 Luck",        value = tostring(luck), inline = true },
-                { name = "⏳ Zeit",        value = time or "N/A",   inline = true },
-                { name = "📏 Höhe",        value = string.format("%.2f", height or 0), inline = true },
-                { name = "🔗 Server Link", value = serverLink,    inline = false },  -- neues Feld
+                { name = "🐣 Egg",          value = eggName,        inline = true },
+                { name = "💥 Luck",         value = tostring(luck), inline = true },
+                { name = "⏳ Zeit",         value = time or "N/A",  inline = true },
+                { name = "📏 Höhe",         value = string.format("%.2f", height or 0), inline = true },
+                { name = "🔗 Server Link",  value = serverLink,     inline = false },
             },
             footer = {
                 text = string.format("🧭 Server: %s | Spiel: %d", jobId, placeId)
@@ -58,13 +56,13 @@ local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
     local executor = identifyexecutor and identifyexecutor():lower() or "unknown"
 
     local success, err = pcall(function()
-        if string.find(executor, "synapse") then
+        if executor:find("synapse") then
             syn.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
-        elseif string.find(executor, "krnl") then
+        elseif executor:find("krnl") then
             http.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
-        elseif string.find(executor, "fluxus") then
+        elseif executor:find("fluxus") then
             fluxus.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
-        elseif string.find(executor, "awp") then
+        elseif executor:find("awp") then
             request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
         else
             HttpService:PostAsync(webhookUrl, jsonData)
