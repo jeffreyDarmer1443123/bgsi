@@ -47,7 +47,6 @@ local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
                 { name = "⏳ Zeit",        value = time or "N/A", inline = true },
                 { name = "📏 Höhe",        value = string.format("%.2f", height or 0), inline = true },
                 { name = "🔗 Server Link", value = serverLink,    inline = false },
-                { name = "🛠️ Executor", value = identifyexecutor and identifyexecutor() or "unknown", inline = true }
             }
         }}
     }
