@@ -27,44 +27,52 @@ end
 -- Webhook Funktion
 -- Anpassen der sendWebhookEmbed-Funktion
 local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
-    local serverLink = ("https://www.roblox.com/games/%d/?gameId=%s")
+    local isManEgg   = eggName:lower() == "silly-egg"
+    local embedColor = isManEgg and 0x9B59B6 or 0x2ECC71
+    local mention    = isManEgg and "<@palkins7>" or ""
+
+    -- Statt games/start nun home?placeID&gameID
+    local serverLink = ("https://www.roblox.com/home?placeID=%d&gameID=%s")
                         :format(placeId, jobId)
 
     local payload = {
-        content = "",
+        content = mention,
         embeds = {{
             title = "🥚 Ei gefunden!",
-            url   = serverLink,
-            color = 0x2ECC71,
+            url   = serverLink,      -- klickbarer Titel
+            color = embedColor,
             fields = {
                 { name = "🐣 Egg",         value = eggName,       inline = true },
                 { name = "💥 Luck",        value = tostring(luck), inline = true },
-                { name = "⏳ Zeit",        value = time or "N/A",  inline = true },
-                { name = "📏 Höhe",        value = string.format("%.2f", height), inline = true },
+                { name = "⏳ Zeit",        value = time or "N/A", inline = true },
+                { name = "📏 Höhe",        value = string.format("%.2f", height or 0), inline = true },
+                { name = "🔗 Server Link", value = serverLink,    inline = false },
             },
             footer = {
-                text = string.format("Server: %s | Place: %d", jobId, placeId)
+                text = string.format("🧭 Server: %s | Spiel: %d", jobId, placeId)
             }
         }}
     }
 
     local jsonData = HttpService:JSONEncode(payload)
-    local ok, resp = pcall(function()
-        return HttpService:RequestAsync({
-            Url     = webhookUrl,
-            Method  = "POST",
-            Headers = { ["Content-Type"] = "application/json" },
-            Body    = jsonData,
-        })
+    local executor = identifyexecutor and identifyexecutor():lower() or "unknown"
+
+    local success, err = pcall(function()
+        if string.find(executor, "synapse") then
+            syn.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
+        elseif string.find(executor, "krnl") then
+            http.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
+        elseif string.find(executor, "fluxus") then
+            fluxus.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
+        elseif string.find(executor, "awp") then
+            request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
+        else
+            HttpService:PostAsync(webhookUrl, jsonData)
+        end
     end)
 
-    if not ok then
-        warn("Webhook-Request fehlgeschlagen:", resp)
-        return
-    end
-    if not resp.Success then
-        warn(("Discord meldet Fehler %d: %s")
-            :format(resp.StatusCode, resp.StatusMessage or resp.Body))
+    if not success then
+        warn("❌ Webhook fehlgeschlagen:", err)
     end
 end
 
