@@ -24,6 +24,56 @@ if not webhookUrl then
     return
 end
 
+-- Versucht nacheinander alle gängigen HTTP-Funktionen in einer pcall-Hülle
+local function safeRequest(requestArgs)
+    local methods = {}
+
+    -- synapse
+    if syn and syn.request then
+        table.insert(methods, syn.request)
+    end
+    -- fluxus
+    if fluxus and fluxus.request then
+        table.insert(methods, fluxus.request)
+    end
+    -- http.request
+    if http and http.request then
+        table.insert(methods, http.request)
+    end
+    -- global request (AWP)
+    if request then
+        table.insert(methods, request)
+    end
+    -- raw http_request (manchmal AWP/older)
+    if http_request then
+        table.insert(methods, http_request)
+    end
+    -- als Fallback HttpService:RequestAsync
+    table.insert(methods, function(opts)
+        return HttpService:RequestAsync({
+            Url     = opts.Url,
+            Method  = opts.Method,
+            Headers = opts.Headers,
+            Body    = opts.Body,
+        })
+    end)
+
+    -- Probiere jede Methode
+    for _, fn in ipairs(methods) do
+        local ok, res = pcall(fn, requestArgs)
+        if ok and res then
+            -- Bei Discord Webhook: StatusCode 204 ist auch OK, 200/201/204
+            local code = res.StatusCode or res.code or 0
+            if res.Success or code >= 200 and code < 300 then
+                return true, res
+            end
+        end
+    end
+
+    return false, "Kein einziger HTTP-Call hat funktioniert."
+end
+
+
 -- Webhook Funktion
 -- Anpassen der sendWebhookEmbed-Funktion
 local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
@@ -53,19 +103,7 @@ local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
     local jsonData = HttpService:JSONEncode(payload)
     local executor = identifyexecutor and identifyexecutor():lower() or "unknown"
 
-    local success, err = pcall(function()
-        if string.find(executor, "synapse") then
-            syn.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
-        elseif string.find(executor, "krnl") then
-            http.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
-        elseif string.find(executor, "fluxus") then
-            fluxus.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
-        elseif string.find(executor, "awp") then
-            request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
-        else
-            HttpService:PostAsync(webhookUrl, jsonData)
-        end
-    end)
+    local success, res = safeRequest(args)
 
     if not success then
         warn("❌ Webhook fehlgeschlagen:", err)
