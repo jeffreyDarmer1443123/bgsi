@@ -62,7 +62,7 @@ local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
             http.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
         elseif executor:find("fluxus") then
             fluxus.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
-        elseif executor:find("awp") then
+        elseif executor:find("AWP") then
             request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
         else
             HttpService:PostAsync(webhookUrl, jsonData)
