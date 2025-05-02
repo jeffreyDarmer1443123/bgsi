@@ -56,13 +56,7 @@ local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
     local executor = identifyexecutor and identifyexecutor():lower() or "unknown"
 
     local success, err = pcall(function()
-        if executor:find("synapse") then
-            syn.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
-        elseif executor:find("krnl") then
-            http.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
-        elseif executor:find("fluxus") then
-            fluxus.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
-        elseif executor:find("AWP") then
+        if executor:find("AWP") then
             request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
         else
             HttpService:PostAsync(webhookUrl, jsonData)
