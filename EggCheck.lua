@@ -24,59 +24,57 @@ if not webhookUrl then
     return
 end
 
--- Ganz oben in EggCheck.lua
-local HttpService      = game:GetService("HttpService")
--- Fallback-request-Funktion
-local requestFunc = (syn and syn.request)
-                or (http and http.request)
-                or (request)
-                or (fluxus and fluxus.request)
-
-if not requestFunc and not HttpService.RequestAsync then
-    warn("❌ Kein HTTP-Request verfügbar! Webhook kann nicht gesendet werden.")
-end
-
--- Neuer sendWebhookEmbed
+-- Webhook Funktion
+-- Anpassen der sendWebhookEmbed-Funktion
 local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
-    local payload = {
-        embeds = {{ title = "🥚 Ei gefunden!", ... }},
-        -- ggf. mentions etc.
-    }
-    local body = HttpService:JSONEncode(payload)
+    local isManEgg    = eggName:lower() == "silly-egg"
+    local embedColor  = isManEgg and 0x9B59B6 or 0x2ECC71
+    local mention     = isManEgg and "<@palkins7>" or ""
 
-    -- Priorität: Exploiter-request, sonst HttpService
-    local ok, response = pcall(function()
-        if requestFunc then
-            return requestFunc({
-                Url     = webhookUrl,
-                Method  = "POST",
-                Headers = { ["Content-Type"] = "application/json" },
-                Body    = body,
-            })
+    -- Neuer Deep-Link zum Server
+    local serverLink = ("roblox://experiences/start?placeId=%d&gameInstanceId=%s")
+                        :format(placeId, jobId)
+
+    local payload = {
+        content = mention,
+        embeds = {{
+            title = "🥚 Ei gefunden!",
+            url   = serverLink,      -- macht den Titel zum klickbaren Link
+            color = embedColor,
+            fields = {
+                { name = "🐣 Egg",         value = eggName,  inline = true },
+                { name = "💥 Luck",        value = tostring(luck), inline = true },
+                { name = "⏳ Zeit",        value = time or "N/A",   inline = true },
+                { name = "📏 Höhe",        value = string.format("%.2f", height or 0), inline = true },
+                { name = "🔗 Server Link", value = serverLink,    inline = false },  -- neues Feld
+            },
+            footer = {
+                text = string.format("🧭 Server: %s | Spiel: %d", jobId, placeId)
+            }
+        }}
+    }
+
+    local jsonData = HttpService:JSONEncode(payload)
+    local executor = identifyexecutor and identifyexecutor():lower() or "unknown"
+
+    local success, err = pcall(function()
+        if string.find(executor, "synapse") then
+            syn.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
+        elseif string.find(executor, "krnl") then
+            http.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
+        elseif string.find(executor, "fluxus") then
+            fluxus.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
+        elseif string.find(executor, "awp") then
+            request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
         else
-            return HttpService:RequestAsync({
-                Url     = webhookUrl,
-                Method  = "POST",
-                Headers = { ["Content-Type"] = "application/json" },
-                Body    = body,
-            })
+            HttpService:PostAsync(webhookUrl, jsonData)
         end
     end)
 
-    if not ok then
-        warn("❌ Webhook-Request fehlgeschlagen:", response)
-        return
-    end
-
-    -- Exploiter-response vs HttpService-Response
-    local status = response.StatusCode or response.status
-    local success = response.Success or (status >=200 and status <300)
-    warn(("📬 Webhook antwortet %d (Success=%s)"):format(status, tostring(success)))
-    if response.Body then
-        warn("📑 Body:", response.Body)
+    if not success then
+        warn("❌ Webhook fehlgeschlagen:", err)
     end
 end
-
 
 
 -- Hilfsfunktion: Luck und Timer aus Egg lesen
