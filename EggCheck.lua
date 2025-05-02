@@ -152,14 +152,32 @@ end
 
 local function parseTimeString(text)
     if not text then return nil end
+
+    -- Format MM:SS z.B. "04:55"
     local minutes, seconds = text:match("^(%d+):(%d+)$")
     if minutes and seconds then
         return tonumber(minutes) * 60 + tonumber(seconds)
     end
+
+    -- Nur Zahl (z.B. "300")
     local n = tonumber(text)
     if n then return n end
+
+    -- "9 minutes", "3 mins"
+    local minOnly = text:match("(%d+)%s*min")
+    if minOnly then
+        return tonumber(minOnly) * 60
+    end
+
+    -- "120 seconds", "120 sec"
+    local secOnly = text:match("(%d+)%s*sec")
+    if secOnly then
+        return tonumber(secOnly)
+    end
+
     return nil
 end
+
 
 
 local numericTime = parseTimeString(bestTime)
