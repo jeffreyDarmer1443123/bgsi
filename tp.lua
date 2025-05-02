@@ -42,8 +42,7 @@ local function safeRequest(opts)
     return false, "Kein HTTP-Call hat erfolgreich geantwortet."
 end
 
--- Zufallsseed
-type(math).randomseed = math.randomseed
+-- Seed für Zufallszahlengenerator
 math.randomseed(os.time())
 
 -- Services
@@ -55,8 +54,8 @@ local gameId         = 85896571713843
 local baseUrl        = "https://games.roblox.com/v1/games/"..gameId.."/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100"
 local serverFile     = "server_ids.txt"
 local cooldownFile   = "server_refresh_time.txt"
-local refreshCooldown= 60
-local maxAttempts    = 5
+local refreshCooldown= 60 -- in Sekunden
+local maxAttempts    = 5  -- Maximal 5 Server probieren
 
 -- Funktion, die einen HTTP-Request mit Retry-Logik ausführt
 local function fetchWithRetry(url)
@@ -126,11 +125,11 @@ end
 
 -- Lädt gespeicherte IDs\ nlocal function loadServerIds()
     if not isfile(serverFile) then return {} end
-    local t = {}
+    local ids = {}
     for line in readfile(serverFile):gmatch("[^\r\n]+") do
-        table.insert(t, line)
+        table.insert(ids, line)
     end
-    return t
+    return ids
 end
 
 -- Hoppt zufällig durch bis Erfolg
@@ -170,23 +169,23 @@ end
 
 -- Hauptfunktion
 local function main()
-    local need = true
+    local needRefresh = true
     if isfile(cooldownFile) then
         local t = tonumber(readfile(cooldownFile))
-        if t and os.time() < t then need = false end
+        if t and os.time() < t then needRefresh = false end
     end
-    if need then
+    if needRefresh then
         refreshServerIds()
     end
 
-    local ids = loadServerIds()
-    if #ids == 0 then
+    local serverIds = loadServerIds()
+    if #serverIds == 0 then
         warn("❗ Keine Server-IDs verfügbar.")
         return
     end
 
-    tryHopServers(ids)
+    tryHopServers(serverIds)
 end
 
--- Start
+-- Script starten
 main()
