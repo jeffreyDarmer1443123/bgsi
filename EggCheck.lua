@@ -39,7 +39,6 @@ local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
         content = mention,
         embeds = {{
             title = "🥚 Ei gefunden!",
-            url   = serverLink,      -- klickbarer Titel
             color = embedColor,
             fields = {
                 { name = "🐣 Egg",         value = eggName,       inline = true },
