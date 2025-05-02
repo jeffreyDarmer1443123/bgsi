@@ -1,11 +1,8 @@
---// Verbesserte EggCheck.lua
-
 local HttpService = game:GetService("HttpService")
 
 -- Sicherstellen, dass shared-Variablen existieren
 local requiredLuck = shared.requiredLuck
 local eggNames = shared.eggNames
-
 local webhookUrl = shared.webhookUrl
 
 if not requiredLuck then
@@ -26,25 +23,25 @@ end
 
 -- Webhook Funktion
 local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
-    local isManEgg = eggName:lower() == "silly-egg"
-    local embedColor = isManEgg and 0x9B59B6 or 0x2ECC71
-    local mention = isManEgg and "<@palkins7>" or ""
+    local isManEgg    = eggName:lower() == "silly-egg"
+    local embedColor  = isManEgg and 0x9B59B6 or 0x2ECC71
+    local mention     = isManEgg and "<@palkins7>" or ""
 
-    local serverLink = ("https://www.roblox.com/games/start?placeId=%d&jobId=%s")
-                        :format(placeId, jobId)
+    -- Neuer Deep-Link zum Server
+    local serverLink = ("https://www.roblox.com/games/start?placeId=%d&jobId=%s"):format(placeId, jobId)
 
     local payload = {
         content = mention,
-        embeds = { {
+        embeds = {{
             title = "🥚 Ei gefunden!",
-            url = serverLink,
+            url   = serverLink,
             color = embedColor,
             fields = {
                 { name = "🐣 Egg",         value = eggName,  inline = true },
                 { name = "💥 Luck",        value = tostring(luck), inline = true },
                 { name = "⏳ Zeit",        value = time or "N/A",   inline = true },
                 { name = "📏 Höhe",        value = string.format("%.2f", height or 0), inline = true },
-                { name = "🔗 Server Link", value = serverLink,    inline = false },
+                { name = "🔗 Server Link", value = serverLink, inline = false },
             },
             footer = {
                 text = string.format("🧭 Server: %s | Spiel: %d", jobId, placeId)
@@ -73,6 +70,7 @@ local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
         warn("❌ Webhook fehlgeschlagen:", err)
     end
 end
+
 -- Hilfsfunktion: Luck und Timer aus Egg lesen
 local function getEggStats(eggFolder)
     local gui = eggFolder:FindFirstChild("Display") and eggFolder.Display:FindFirstChildWhichIsA("SurfaceGui")
@@ -86,13 +84,11 @@ local function getEggStats(eggFolder)
     return luckValue, timeText
 end
 
--- Parser für Zeitangaben
+-- Parser: Zeitangaben wie "9 minutes" oder "04:55"
 local function parseTimeString(text)
     if not text then return nil end
     local minutes, seconds = text:match("^(%d+):(%d+)$")
-    if minutes and seconds then
-        return tonumber(minutes) * 60 + tonumber(seconds)
-    end
+    if minutes and seconds then return tonumber(minutes)*60 + tonumber(seconds) end
     local n = tonumber(text)
     if n then return n end
     local minOnly = text:match("(%d+)%s*min")
@@ -169,79 +165,6 @@ if #candidates == 0 then
     shared.eggCheckFinished = true
     return
 end
-("(%d+)%s*sec")
-    if secOnly then return tonumber(secOnly) end
-    return nil
-end
-
--- GUI anzeigen beim Fund
-local function showFoundGui(message)
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "EggFoundGui"
-    screenGui.ResetOnSpawn = false
-    screenGui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
-
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.6, 0, 0.15, 0)
-    label.Position = UDim2.new(0.2, 0, 0.4, 0)
-    label.BackgroundColor3 = Color3.fromRGB(50, 205, 50)
-    label.TextColor3 = Color3.new(1, 1, 1)
-    label.TextStrokeTransparency = 0
-    label.Font = Enum.Font.SourceSansBold
-    label.TextScaled = true
-    label.Text = message
-    label.Parent = screenGui
-
-    game.Debris:AddItem(screenGui, 5)
-end
-
--- Sound abspielen beim Fund
-local function playFoundSound()
-    local sound = Instance.new("Sound")
-    sound.SoundId = "rbxassetid://9118823104"
-    sound.Volume = 1
-    sound.Name = "EggFoundSound"
-    sound.Parent = workspace
-    sound:Play()
-
-    game.Debris:AddItem(sound, 5)
-end
-
--- Suche nach Eggs
-local rifts = workspace:FindFirstChild("Rendered") and workspace.Rendered:FindFirstChild("Rifts")
-if not rifts then
-    warn("❌ Ordner Workspace.Rendered.Rifts nicht gefunden.")
-    shared.eggCheckFinished = true
-    return
-end
-
-local manEgg = rifts:FindFirstChild("silly-egg")
-if manEgg then
-    local luck, timeText = getEggStats(manEgg)
-    local yInfo = ""
-    local outputPart = manEgg:FindFirstChild("Output")
-    if outputPart and outputPart:IsA("BasePart") then
-        yInfo = (" | Y=%.2f"):format(outputPart.Position.Y)
-    end
-    local timeInfo = timeText and (" | Zeit übrig: " .. timeText) or ""
-    print(("✅ 'silly-egg': Luck %s%s%s"):format(luck or "n/A", timeInfo, yInfo))
-else
-    print("ℹ️ Kein 'silly-egg' gefunden.")
-end
-
--- Suche nach passenden Eiern
-local candidates = {}
-for _, eggFolder in ipairs(rifts:GetChildren()) do
-    if eggFolder.Name ~= "silly-egg" and table.find(eggNames, eggFolder.Name) then
-        table.insert(candidates, eggFolder)
-    end
-end
-
-if #candidates == 0 then
-    warn(("❌ Kein Egg mit den Namen %s gefunden."):format(table.concat(eggNames, ", ")))
-    shared.eggCheckFinished = true
-    return
-end
 
 -- Bester Egg mit höchstem Luck
 local bestEgg, bestLuck, bestTime
@@ -268,7 +191,6 @@ if outputPart and outputPart:IsA("BasePart") then
 end
 
 local numericTime = parseTimeString(bestTime)
-print(numericTime, shared.minTime)
 local ok = bestLuck >= requiredLuck and numericTime and numericTime >= shared.minTime
 local icon = ok and "✅" or "❌"
 local comp = ok and "≥" or "<"
@@ -289,11 +211,9 @@ if ok then
         game.PlaceId
     )
 
-    -- 🎧 Sound + 🖼 GUI
     playFoundSound()
     showFoundGui(("🥚 Ei gefunden: %s | Luck: %d"):format(bestEgg.Name, bestLuck))
 
-    -- 📊 Fortschritts-Tracking
     shared.lastEggName = bestEgg.Name
     shared.lastEggLuck = bestLuck
     shared.statusText = "✅ Ei gefunden!"
