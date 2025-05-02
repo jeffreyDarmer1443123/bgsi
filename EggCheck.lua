@@ -31,10 +31,11 @@ local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
     local embedColor = isManEgg and 0x9B59B6 or 0x2ECC71
     local mention    = isManEgg and "<@palkins7>" or ""
 
-    -- Statt games/start nun home?placeID&gameID
+    -- HTTPS-Link, der den Browser lädt und dann den Launcher startet:
     local serverLink = ("roblox://experiences/start?placeId=%d&gameInstanceId=%s")
                         :format(placeId, jobId)
 
+    -- Baue die Discord-Payload
     local payload = {
         content = mention,
         embeds = {{
@@ -44,9 +45,9 @@ local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
             fields = {
                 { name = "🐣 Egg",         value = eggName,       inline = true },
                 { name = "💥 Luck",        value = tostring(luck), inline = true },
-                { name = "⏳ Zeit",        value = time or "N/A", inline = true },
+                { name = "⏳ Zeit",        value = time or "N/A",  inline = true },
                 { name = "📏 Höhe",        value = string.format("%.2f", height or 0), inline = true },
-                { name = "🔗 Server Link", value = serverLink,    inline = false },
+                { name = "🔗 Server Link", value = serverLink,     inline = false },
             },
             footer = {
                 text = string.format("🧭 Server: %s | Spiel: %d", jobId, placeId)
@@ -54,27 +55,28 @@ local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
         }}
     }
 
+    -- JSON und Header korrekt setzen
     local jsonData = HttpService:JSONEncode(payload)
-    local executor = identifyexecutor and identifyexecutor():lower() or "unknown"
-
-    local success, err = pcall(function()
-        if string.find(executor, "synapse") then
-            syn.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
-        elseif string.find(executor, "krnl") then
-            http.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
-        elseif string.find(executor, "fluxus") then
-            fluxus.request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
-        elseif string.find(executor, "awp") then
-            request({ Url = webhookUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = jsonData })
-        else
-            HttpService:PostAsync(webhookUrl, jsonData)
-        end
+    local ok, response = pcall(function()
+        return HttpService:RequestAsync({
+            Url     = webhookUrl,
+            Method  = "POST",
+            Headers = { ["Content-Type"] = "application/json" },
+            Body    = jsonData,
+        })
     end)
 
-    if not success then
-        warn("❌ Webhook fehlgeschlagen:", err)
+    if not ok then
+        warn("❌ Webhook-Request fehlgeschlagen:", tostring(response))
+        return
+    end
+    if not response.Success or response.StatusCode < 200 or response.StatusCode >= 300 then
+        warn(("❌ Discord meldet Fehler %d: %s"):format(
+            response.StatusCode, response.StatusMessage or response.Body
+        ))
     end
 end
+
 
 
 -- Hilfsfunktion: Luck und Timer aus Egg lesen
