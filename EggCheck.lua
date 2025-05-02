@@ -241,11 +241,19 @@ if ok then
     playFoundSound()
     showFoundGui(("🥚 Ei gefunden: %s | Luck: %d"):format(bestEgg.Name, bestLuck))
 
+    shared.lastEggName = bestEgg.Name
+    shared.lastEggLuck = bestLuck
+    shared.statusText = "✅ Ei gefunden!"
+
 
     shared.foundEgg = true
     shared.eggCheckFinished = true
     print("✅ Egg gefunden und gemeldet!")
 else
+    shared.lastEggName = bestEgg.Name
+    shared.lastEggLuck = bestLuck
+    shared.statusText = "❌ Nicht gut genug. Hüpfe weiter..."
+
     warn(message)
     shared.eggCheckFinished = true
 end
