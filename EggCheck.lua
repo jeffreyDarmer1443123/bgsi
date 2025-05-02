@@ -179,6 +179,42 @@ local function parseTimeString(text)
 end
 
 
+local function showFoundGui(message)
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "EggFoundGui"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.6, 0, 0.15, 0)
+    label.Position = UDim2.new(0.2, 0, 0.4, 0)
+    label.BackgroundColor3 = Color3.fromRGB(50, 205, 50)
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.TextStrokeTransparency = 0
+    label.Font = Enum.Font.SourceSansBold
+    label.TextScaled = true
+    label.Text = message
+    label.Parent = screenGui
+
+    game.Debris:AddItem(screenGui, 5)
+end
+
+showFoundGui(("🥚 Ei gefunden: %s | Luck: %d"):format(bestEgg.Name, bestLuck))
+
+-- Sound abspielen beim Fund
+local function playFoundSound()
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxassetid://9118823104" -- Beispiel: Zelda-Truhe Sound
+    sound.Volume = 1
+    sound.Name = "EggFoundSound"
+    sound.Parent = workspace
+    sound:Play()
+    
+    game.Debris:AddItem(sound, 5) -- automatisch entfernen
+end
+
+playFoundSound()
+
 
 local numericTime = parseTimeString(bestTime)
 print(numericTime, shared.minTime)
@@ -201,6 +237,11 @@ if ok then
         game.JobId,
         game.PlaceId
     )
+
+    -- 🎧 Sound + 🖼 GUI
+    playFoundSound()
+    showFoundGui(("🥚 Ei gefunden: %s | Luck: %d"):format(bestEgg.Name, bestLuck))
+
 
     shared.foundEgg = true
     shared.eggCheckFinished = true
