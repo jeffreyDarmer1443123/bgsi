@@ -1,25 +1,17 @@
+-- tp.lua: Zufälliges Server-Hopping mit sicherem HTTP-Fallback
+
 -- Safe HTTP-Request Utility für verschiedene Exploiter
 local HttpService = game:GetService("HttpService")
 
 local function safeRequest(opts)
     local methods = {}
 
-    if syn and syn.request then
-        table.insert(methods, syn.request)
-    end
-    if fluxus and fluxus.request then
-        table.insert(methods, fluxus.request)
-    end
-    if http and http.request then
-        table.insert(methods, http.request)
-    end
-    if request then
-        table.insert(methods, request)
-    end
-    if http_request then
-        table.insert(methods, http_request)
-    end
-    -- Fallback: HttpService
+    if syn and syn.request      then table.insert(methods, syn.request)      end
+    if fluxus and fluxus.request then table.insert(methods, fluxus.request) end
+    if http and http.request    then table.insert(methods, http.request)    end
+    if request                  then table.insert(methods, request)         end
+    if http_request             then table.insert(methods, http_request)    end
+    -- Fallback auf HttpService
     table.insert(methods, function(o)
         return HttpService:RequestAsync({
             Url     = o.Url,
@@ -31,15 +23,15 @@ local function safeRequest(opts)
 
     for _, fn in ipairs(methods) do
         local ok, res = pcall(fn, opts)
-        if ok and res then
+        if ok and type(res) == "table" then
             local code = res.StatusCode or res.code or 0
-            if res.Success or (code >= 200 and code < 300) then
+            if (res.Success ~= false) and (code >= 200 and code < 300) then
                 return true, res
             end
         end
     end
 
-    return false, "Kein HTTP-Call hat erfolgreich geantwortet."
+    return false, "Kein einziger HTTP-Call hat erfolgreich geantwortet."
 end
 
 -- Seed für Zufallszahlengenerator
@@ -54,10 +46,10 @@ local gameId         = 85896571713843
 local baseUrl        = "https://games.roblox.com/v1/games/"..gameId.."/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100"
 local serverFile     = "server_ids.txt"
 local cooldownFile   = "server_refresh_time.txt"
-local refreshCooldown= 60 -- in Sekunden
-local maxAttempts    = 5  -- Maximal 5 Server probieren
+local refreshCooldown= 60      -- in Sekunden
+local maxAttempts    = 5       -- Maximal 5 Server-Versuche
 
--- Funktion, die einen HTTP-Request mit Retry-Logik ausführt
+-- Holt JSON mit Retry-Logik
 local function fetchWithRetry(url)
     local maxRetries = 5
     local retries   = 0
@@ -75,10 +67,10 @@ local function fetchWithRetry(url)
             elseif code == 429 then
                 retries = retries + 1
                 local waitTime = 5 * retries
-                warn("❗ Rate-Limit, warte "..waitTime.."s ("..retries.."/"..maxRetries..")")
+                warn("❗ Rate-Limit erreicht, warte "..waitTime.."s ("..retries.."/"..maxRetries..")")
                 wait(waitTime)
             else
-                warn("❗ HTTP-Error "..tostring(code))
+                warn("❗ HTTP-Error: "..tostring(code))
                 return nil
             end
         else
@@ -123,8 +115,11 @@ local function refreshServerIds()
     print("✔️ Serverliste aktualisiert ("..#allIds.." IDs).")
 end
 
--- Lädt gespeicherte IDs\ nlocal function loadServerIds()
-    if not isfile(serverFile) then return {} end
+-- Lädt gespeicherte Server-IDs aus Datei
+local function loadServerIds()
+    if not isfile(serverFile) then
+        return {}
+    end
     local ids = {}
     for line in readfile(serverFile):gmatch("[^\r\n]+") do
         table.insert(ids, line)
@@ -134,14 +129,15 @@ end
 
 -- Hoppt zufällig durch bis Erfolg
 local function tryHopServers(serverIds)
-    local attempts = 0
-    local startId  = game.JobId
+    local attempts  = 0
+    local startJob  = game.JobId
 
     while #serverIds > 0 and attempts < maxAttempts do
         attempts = attempts + 1
-
         local idx      = math.random(1, #serverIds)
         local serverId = serverIds[idx]
+
+        -- entfernen und speichern
         table.remove(serverIds, idx)
         writefile(serverFile, table.concat(serverIds, "\n"))
 
@@ -154,38 +150,41 @@ local function tryHopServers(serverIds)
             wait(2)
         else
             wait(8)
-            if game.JobId ~= startId then
-                print("✅ Erfolgreich bei "..serverId)
+            if game.JobId ~= startJob then
+                print("✅ Erfolgreich neuen Server betreten: "..serverId)
                 return
             else
-                warn("❗ Noch derselbe Server, neuer Versuch...")
+                warn("❗ Noch derselbe Server, neuer Versuch…")
                 wait(2)
             end
         end
     end
 
-    warn("❗ Max Attempts erreicht, kein neuer Server gefunden.")
+    warn("❗ Maximalversuche erreicht. Kein neuer Server gefunden.")
 end
 
--- Hauptfunktion
+-- Hauptlogik
 local function main()
     local needRefresh = true
     if isfile(cooldownFile) then
         local t = tonumber(readfile(cooldownFile))
-        if t and os.time() < t then needRefresh = false end
+        if t and os.time() < t then
+            needRefresh = false
+        end
     end
+
     if needRefresh then
         refreshServerIds()
     end
 
     local serverIds = loadServerIds()
     if #serverIds == 0 then
-        warn("❗ Keine Server-IDs verfügbar.")
+        warn("❗ Keine Server-IDs verfügbar!")
         return
     end
 
     tryHopServers(serverIds)
 end
 
--- Script starten
+-- Ausführen
 main()
