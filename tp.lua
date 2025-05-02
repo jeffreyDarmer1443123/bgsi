@@ -1,3 +1,4 @@
+-- Safe HTTP-Request Utility für verschiedene Exploiter
 local HttpService = game:GetService("HttpService")
 
 local function safeRequest(opts)
@@ -41,174 +42,151 @@ local function safeRequest(opts)
     return false, "Kein HTTP-Call hat erfolgreich geantwortet."
 end
 
-math.randomseed(os.time())  -- Seed für Zufallszahlengenerator
+-- Zufallsseed
+type(math).randomseed = math.randomseed
+math.randomseed(os.time())
 
-local HttpService = game:GetService("HttpService")
+-- Services
 local TeleportService = game:GetService("TeleportService")
-local Players = game:GetService("Players")
+local Players         = game:GetService("Players")
 
-local gameId = 85896571713843 -- Game ID hier eintragen
-local baseUrl = "https://games.roblox.com/v1/games/" .. gameId .. "/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100"
-local PLACE_ID = game.PlaceId
-local serverFile = "server_ids.txt"
-local cooldownFile = "server_refresh_time.txt"
-local refreshCooldown = 60 -- in Sekunden
-local maxAttempts = 5 -- ❗ Maximal 5 Server probieren
+-- Konfiguration
+local gameId         = 85896571713843
+local baseUrl        = "https://games.roblox.com/v1/games/"..gameId.."/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100"
+local serverFile     = "server_ids.txt"
+local cooldownFile   = "server_refresh_time.txt"
+local refreshCooldown= 60
+local maxAttempts    = 5
 
 -- Funktion, die einen HTTP-Request mit Retry-Logik ausführt
 local function fetchWithRetry(url)
     local maxRetries = 5
-    local retryCount = 0
+    local retries   = 0
 
-    while retryCount <= maxRetries do
-        local response, res = safeRequest({
-            Url = url,
-            Method = "GET",
-            Headers = {
-                ["Content-Type"] = "application/json"
-            }
+    while retries <= maxRetries do
+        local ok, res = safeRequest({
+            Url     = url,
+            Method  = "GET",
+            Headers = { ["Content-Type"] = "application/json" },
         })
-
-        if response.StatusCode == 200 then
-            return response.Body
-        elseif response.StatusCode == 429 then
-            retryCount = retryCount + 1
-            local waitTime = 5 * retryCount
-            warn("❗ Rate Limit erreicht, warte " .. waitTime .. " Sekunden und versuche erneut (" .. retryCount .. "/" .. maxRetries .. ")...")
-            wait(waitTime)
-        else
-            warn("❗ Fehler beim Abrufen: HTTP-Status " .. tostring(response.StatusCode))
-            return nil
-        end
-    end
-
-    error("❗ Zu viele fehlgeschlagene Versuche, Abbruch.")
-end
-
--- Server-IDs aktualisieren und speichern
-local function refreshServerIds()
-    local allServerIds = {}
-    local url = baseUrl
-
-    while url and #allServerIds < 200 do
-        local body = fetchWithRetry(url)
-
-        if body then
-            local data = HttpService:JSONDecode(body)
-
-            for _, server in ipairs(data.data) do
-                if not server.vipServerId and #allServerIds < 200 then
-                    table.insert(allServerIds, server.id)
-                end
-            end
-
-            if data.nextPageCursor and #allServerIds < 200 then
-                url = baseUrl .. "&cursor=" .. data.nextPageCursor
+        if ok and res then
+            local code = res.StatusCode or res.code
+            if code == 200 then
+                return res.Body
+            elseif code == 429 then
+                retries = retries + 1
+                local waitTime = 5 * retries
+                warn("❗ Rate-Limit, warte "..waitTime.."s ("..retries.."/"..maxRetries..")")
+                wait(waitTime)
             else
-                url = nil
+                warn("❗ HTTP-Error "..tostring(code))
+                return nil
             end
-
-            wait(1)
         else
-            break
+            retries = retries + 1
+            wait(2)
         end
     end
 
-    if #allServerIds == 0 then
-        error("❗ Keine gültigen öffentlichen Server gefunden.")
-    end
-
-    -- Speichern der IDs
-    local idsString = table.concat(allServerIds, "\n")
-    writefile(serverFile, idsString)
-
-    -- Neue Refresh-Zeit speichern
-    local nextRefreshTime = os.time() + refreshCooldown
-    writefile(cooldownFile, tostring(nextRefreshTime))
-
-    print("✔️ Serverliste aktualisiert mit " .. tostring(#allServerIds) .. " Servern.")
+    error("❗ Zu viele Fehlversuche beim HTTP-Request.")
 end
 
--- Lade Server-IDs aus Datei
-local function loadServerIds()
-    if not isfile(serverFile) then
-        return {}
+-- Aktualisiert und speichert Server-IDs
+local function refreshServerIds()
+    local allIds = {}
+    local url    = baseUrl
+
+    while url and #allIds < 200 do
+        local body = fetchWithRetry(url)
+        if not body then break end
+
+        local data = HttpService:JSONDecode(body)
+        for _, srv in ipairs(data.data) do
+            if not srv.vipServerId and #allIds < 200 then
+                table.insert(allIds, srv.id)
+            end
+        end
+
+        if data.nextPageCursor and #allIds < 200 then
+            url = baseUrl.."&cursor="..data.nextPageCursor
+        else
+            url = nil
+        end
+        wait(1)
     end
 
-    local content = readfile(serverFile)
-    local ids = {}
-    for line in string.gmatch(content, "[^\r\n]+") do
-        table.insert(ids, line)
+    if #allIds == 0 then
+        error("❗ Keine öffentlichen Server gefunden.")
     end
-    return ids
+
+    writefile(serverFile, table.concat(allIds, "\n"))
+    writefile(cooldownFile, tostring(os.time() + refreshCooldown))
+    print("✔️ Serverliste aktualisiert ("..#allIds.." IDs).")
 end
 
--- Server-Hopping mit mehreren Versuchen
+-- Lädt gespeicherte IDs\ nlocal function loadServerIds()
+    if not isfile(serverFile) then return {} end
+    local t = {}
+    for line in readfile(serverFile):gmatch("[^\r\n]+") do
+        table.insert(t, line)
+    end
+    return t
+end
+
+-- Hoppt zufällig durch bis Erfolg
 local function tryHopServers(serverIds)
     local attempts = 0
-    local initialServer = game.JobId
+    local startId  = game.JobId
 
     while #serverIds > 0 and attempts < maxAttempts do
         attempts = attempts + 1
 
-        -- Zufälligen Index wählen
-        local randomIndex = math.random(1, #serverIds)
-        local serverId    = serverIds[randomIndex]
-
-        -- ServerID aus der Liste entfernen
-        table.remove(serverIds, randomIndex)
+        local idx      = math.random(1, #serverIds)
+        local serverId = serverIds[idx]
+        table.remove(serverIds, idx)
         writefile(serverFile, table.concat(serverIds, "\n"))
 
-        -- Teleport-Versuch
-        print("🚀 Versuch #" .. attempts .. ": Hüpfe zu zufälligem Server " .. serverId)
-        local success, err = pcall(function()
+        print("🚀 Versuch #"..attempts..": Teleport zu "..serverId)
+        local ok, err = pcall(function()
             TeleportService:TeleportToPlaceInstance(gameId, serverId, Players.LocalPlayer)
         end)
-
-        if not success then
-            warn("❗ Fehler beim Teleportieren: " .. tostring(err))
+        if not ok then
+            warn("❗ Teleport-Error: "..tostring(err))
             wait(2)
         else
-            -- Warte kurz, dann prüfen
             wait(8)
-            if game.JobId ~= initialServer then
-                print("✅ Erfolgreich neuen Server betreten: " .. serverId)
+            if game.JobId ~= startId then
+                print("✅ Erfolgreich bei "..serverId)
                 return
             else
-                warn("❗ Immer noch auf demselben Server, versuche erneut...")
+                warn("❗ Noch derselbe Server, neuer Versuch...")
                 wait(2)
             end
         end
     end
 
-    warn("❗ Maximalversuche erreicht. Kein neuer Server gefunden.")
+    warn("❗ Max Attempts erreicht, kein neuer Server gefunden.")
 end
 
-
--- Hauptlogik starten
+-- Hauptfunktion
 local function main()
-    local needRefresh = true
-
+    local need = true
     if isfile(cooldownFile) then
-        local refreshTime = tonumber(readfile(cooldownFile))
-        if refreshTime and os.time() < refreshTime then
-            needRefresh = false
-        end
+        local t = tonumber(readfile(cooldownFile))
+        if t and os.time() < t then need = false end
     end
-
-    if needRefresh then
+    if need then
         refreshServerIds()
     end
 
-    local serverIds = loadServerIds()
-
-    if #serverIds == 0 then
-        warn("❗ Keine Server-IDs verfügbar!")
+    local ids = loadServerIds()
+    if #ids == 0 then
+        warn("❗ Keine Server-IDs verfügbar.")
         return
     end
 
-    tryHopServers(serverIds)
+    tryHopServers(ids)
 end
 
--- Script starten
+-- Start
 main()
