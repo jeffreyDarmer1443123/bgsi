@@ -30,7 +30,7 @@ local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
     local embedColor = isManEgg and 0x9B59B6 or 0x2ECC71
     local mention    = isManEgg and "<@palkins7>" or ""
     -- Deep-Link zum aktuellen Server
-    local serverLink = ("https://www.roblox.com/games/start?placeId=%d&jobId=%s")
+    local serverLink = ("roblox://experiences/start?placeId=%d&gameInstanceId=%s")
                         :format(placeId, jobId)
 
     local payload = {
