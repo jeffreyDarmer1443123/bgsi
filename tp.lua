@@ -5,7 +5,6 @@ local HttpService = game:GetService("HttpService")
 
 local function safeRequest(opts)
     local methods = {}
-
     if syn and syn.request      then table.insert(methods, syn.request)      end
     if fluxus and fluxus.request then table.insert(methods, fluxus.request) end
     if http and http.request    then table.insert(methods, http.request)    end
@@ -127,17 +126,16 @@ local function loadServerIds()
     return ids
 end
 
--- Pcall-geschützter Teleport-Aufruf, der immer eine Tabelle übergibt
+-- Pcall-geschützter Teleport-Aufruf, übergibt UserId-Array
 local function safeTeleportToInstance(placeId, jobId, player)
     local ok, err = pcall(function()
-        TeleportService:TeleportToPlaceInstance(placeId, jobId, { player })
+        TeleportService:TeleportToPlaceInstance(placeId, jobId, { player.UserId })
     end)
     if not ok then
         warn("❗ TeleportToPlaceInstance fehlgeschlagen: " .. tostring(err))
     end
-    return ok
+    return ok, err
 end
-
 
 -- Hoppt zufällig durch bis Erfolg
 local function tryHopServers(serverIds)
@@ -154,9 +152,9 @@ local function tryHopServers(serverIds)
         writefile(serverFile, table.concat(serverIds, "\n"))
 
         print("🚀 Versuch #"..attempts..": Teleport zu "..serverId)
-        local ok = safeTeleportToInstance(gameId, serverId, Players.LocalPlayer)
+        local ok, err = safeTeleportToInstance(gameId, serverId, Players.LocalPlayer)
         if not ok then
-            warn("❗ Teleport-Error: "..tostring(err))
+            warn("❗ Teleport-Error: " .. tostring(err))
             wait(2)
         else
             wait(8)
@@ -164,7 +162,7 @@ local function tryHopServers(serverIds)
                 print("✅ Erfolgreich neuen Server betreten: "..serverId)
                 return
             else
-                warn("❗ Noch derselbe Server, neuer Versuch…")
+                warn("❗ Noch auf demselben Server, neuer Versuch…")
                 wait(2)
             end
         end
