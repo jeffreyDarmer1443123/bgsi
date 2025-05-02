@@ -127,6 +127,18 @@ local function loadServerIds()
     return ids
 end
 
+-- Pcall-geschützter Teleport-Aufruf, der immer eine Tabelle übergibt
+local function safeTeleportToInstance(placeId, jobId, player)
+    local ok, err = pcall(function()
+        TeleportService:TeleportToPlaceInstance(placeId, jobId, { player })
+    end)
+    if not ok then
+        warn("❗ TeleportToPlaceInstance fehlgeschlagen: " .. tostring(err))
+    end
+    return ok
+end
+
+
 -- Hoppt zufällig durch bis Erfolg
 local function tryHopServers(serverIds)
     local attempts  = 0
@@ -142,9 +154,7 @@ local function tryHopServers(serverIds)
         writefile(serverFile, table.concat(serverIds, "\n"))
 
         print("🚀 Versuch #"..attempts..": Teleport zu "..serverId)
-        local ok, err = pcall(function()
-            TeleportService:TeleportToPlaceInstance(gameId, serverId, Players.LocalPlayer)
-        end)
+        local ok = safeTeleportToInstance(gameId, serverId, Players.LocalPlayer)
         if not ok then
             warn("❗ Teleport-Error: "..tostring(err))
             wait(2)
