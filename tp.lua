@@ -1,11 +1,47 @@
-math.randomseed(os.time())  -- Seed für Zufallszahlengenerator
+local HttpService = game:GetService("HttpService")
 
--- Kompatibilität für verschiedene Exploiter
-local req = (syn and syn.request) or (http and http.request) or (request) or (fluxus and fluxus.request)
+local function safeRequest(opts)
+    local methods = {}
 
-if not req then
-    error("❗ Dein Executor unterstützt keine HTTP-Requests!")
+    if syn and syn.request then
+        table.insert(methods, syn.request)
+    end
+    if fluxus and fluxus.request then
+        table.insert(methods, fluxus.request)
+    end
+    if http and http.request then
+        table.insert(methods, http.request)
+    end
+    if request then
+        table.insert(methods, request)
+    end
+    if http_request then
+        table.insert(methods, http_request)
+    end
+    -- Fallback: HttpService
+    table.insert(methods, function(o)
+        return HttpService:RequestAsync({
+            Url     = o.Url,
+            Method  = o.Method,
+            Headers = o.Headers,
+            Body    = o.Body,
+        })
+    end)
+
+    for _, fn in ipairs(methods) do
+        local ok, res = pcall(fn, opts)
+        if ok and res then
+            local code = res.StatusCode or res.code or 0
+            if res.Success or (code >= 200 and code < 300) then
+                return true, res
+            end
+        end
+    end
+
+    return false, "Kein HTTP-Call hat erfolgreich geantwortet."
 end
+
+math.randomseed(os.time())  -- Seed für Zufallszahlengenerator
 
 local HttpService = game:GetService("HttpService")
 local TeleportService = game:GetService("TeleportService")
@@ -14,11 +50,9 @@ local Players = game:GetService("Players")
 local gameId = 85896571713843 -- Game ID hier eintragen
 local baseUrl = "https://games.roblox.com/v1/games/" .. gameId .. "/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100"
 local PLACE_ID = game.PlaceId
-
 local serverFile = "server_ids.txt"
 local cooldownFile = "server_refresh_time.txt"
 local refreshCooldown = 60 -- in Sekunden
-
 local maxAttempts = 5 -- ❗ Maximal 5 Server probieren
 
 -- Funktion, die einen HTTP-Request mit Retry-Logik ausführt
@@ -27,7 +61,7 @@ local function fetchWithRetry(url)
     local retryCount = 0
 
     while retryCount <= maxRetries do
-        local response = req({
+        local response, res = safeRequest({
             Url = url,
             Method = "GET",
             Headers = {
