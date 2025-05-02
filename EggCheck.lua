@@ -32,7 +32,7 @@ local function sendWebhookEmbed(eggName, luck, time, height, jobId, placeId)
     local mention    = isManEgg and "<@palkins7>" or ""
 
     -- Statt games/start nun home?placeID&gameID
-    local serverLink = ("roblox://experiences/start?placeId=%d&gameInstanceId=%s")
+    local serverLink = ("https://jeffreydarmer1443123.github.io/?placeId=%d&gameInstanceId=%s")
                         :format(placeId, jobId)
 
     local payload = {
