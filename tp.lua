@@ -170,16 +170,14 @@ local function tryHopServers(data)
         saveData(data)
 
         print("🚀 Versuch #" .. attempts .. ": Teleport zu " .. serverId)
-        task.wait(2)
+        task.wait(1)
         local ok, _ = safeTeleportToInstance(gameId, serverId)
 
         if ok then
-            task.wait(5)
+            task.wait(3)
             if game.JobId ~= startJob then
                 return
             end
-        else
-            task.wait(2)
         end
     end
 
