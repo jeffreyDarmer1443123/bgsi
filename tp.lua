@@ -116,7 +116,12 @@ local function refreshServerIds(data)
         local body = fetchWithRetry(url)
         if not body then break end
 
-        local response = HttpService:JSONDecode(body)
+        local okDecode, response = pcall(HttpService.JSONDecode, HttpService, body)
+        if not okDecode or type(response) ~= "table" or not response.data then
+            warn("❗ Ungültige Server-Antwort erhalten.")
+            break
+        end
+
         for _, srv in ipairs(response.data) do
             if not srv.vipServerId then
                 table.insert(allIds, srv.id)
@@ -124,14 +129,17 @@ local function refreshServerIds(data)
         end
 
         if response.nextPageCursor and #allIds < maxServerIds then
-            url = baseUrl.."&cursor="..response.nextPageCursor
+            url = baseUrl .. "&cursor=" .. response.nextPageCursor
         else
             url = nil
         end
     end
 
     if #allIds == 0 then
-        error("❗ Keine öffentlichen Server gefunden.")
+        warn("❗ Keine öffentlichen Server gefunden. Versuche es später erneut.")
+        data.refreshInProgress = false
+        saveData(data)
+        return
     end
 
     data.serverIds = allIds
@@ -139,7 +147,7 @@ local function refreshServerIds(data)
     data.refreshInProgress = false
     saveData(data)
 
-    print("✔️ Serverliste aktualisiert: "..#allIds.." Server gespeichert.")
+    print("✔️ Serverliste aktualisiert: " .. #allIds .. " Server gespeichert.")
 end
 
 -- 🧭 Sicheres Teleportieren
@@ -148,7 +156,7 @@ local function safeTeleportToInstance(gameId, serverId)
         TeleportService:TeleportToPlaceInstance(gameId, serverId)
     end)
     if not ok then
-        warn("❗ Teleport-Fehler: "..tostring(err))
+        warn("❗ Teleport-Fehler: " .. tostring(err))
     end
     return ok, err
 end
@@ -178,7 +186,7 @@ local function tryHopServers(data)
         end
     end
 
-    warn("❗ Kein gültiger Server nach "..maxAttempts.." Versuchen.")
+    warn("❗ Kein gültiger Server nach " .. maxAttempts .. " Versuchen.")
 end
 
 -- 🚀 Hauptfunktion
