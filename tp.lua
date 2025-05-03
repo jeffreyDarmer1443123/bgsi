@@ -194,7 +194,7 @@ local function tryHopServers(data)
         local ok, _ = safeTeleportToInstance(gameId, serverId)
 
         if ok then
-            task.wait(2)
+            task.wait(5)
             if game.JobId ~= startJob then
                 return
             end
