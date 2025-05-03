@@ -45,8 +45,9 @@ local gameId         = 85896571713843
 local baseUrl        = "https://games.roblox.com/v1/games/"..gameId.."/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100"
 local serverFile     = "server_ids.txt"
 local cooldownFile   = "server_refresh_time.txt"
-local refreshCooldown= 60      -- in Sekunden
-local maxAttempts    = 5       -- Maximal 5 Server-Versuche
+local refreshCooldown= shared.refreshCooldown     -- in Sekunden
+local maxAttempts    = shared.maxAttempts       -- Maximal 5 Server-Versuche
+local maxServerIds   = shared.maxServerIds    -- Maximal 200 Server-IDs
 
 -- Holt JSON mit Retry-Logik
 local function fetchWithRetry(url)
@@ -86,18 +87,18 @@ local function refreshServerIds()
     local allIds = {}
     local url    = baseUrl
 
-    while url and #allIds < 200 do
+    while url and #allIds < maxServerIds do
         local body = fetchWithRetry(url)
         if not body then break end
 
         local data = HttpService:JSONDecode(body)
         for _, srv in ipairs(data.data) do
-            if not srv.vipServerId and #allIds < 200 then
+            if not srv.vipServerId and #allIds < maxServerIds then
                 table.insert(allIds, srv.id)
             end
         end
 
-        if data.nextPageCursor and #allIds < 200 then
+        if data.nextPageCursor and #allIds < maxServerIds then
             url = baseUrl.."&cursor="..data.nextPageCursor
         else
             url = nil
