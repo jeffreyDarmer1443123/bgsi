@@ -153,13 +153,13 @@ local function tryHopServers(serverIds)
         writefile(serverFile, table.concat(serverIds, "\n"))
 
         print("🚀 Versuch #"..attempts..": Teleport zu "..serverId)
-        task.wait(3)
+        task.wait(2)
         local ok, err = safeTeleportToInstance(gameId, serverId)
         if not ok then
             warn("❗ Teleport-Error: " .. tostring(err))
             task.wait(2)
         else
-            task.wait(8)
+            task.wait(5)
             if game.JobId ~= startJob then
                 print("✅ Erfolgreich neuen Server betreten: "..serverId)
                 return
