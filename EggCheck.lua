@@ -135,7 +135,7 @@ for _, eggFolder in ipairs(rifts:GetChildren()) do
 end
 
 if #candidates == 0 then
-    warn(("❌ Kein Egg mit den Namen %s gefunden."):format(table.concat(eggNames, ", ")))
+    --warn(("❌ Kein Egg mit den Namen %s gefunden."):format(table.concat(eggNames, ", ")))
     shared.eggCheckFinished = true
     return
 end
@@ -152,7 +152,7 @@ for _, ef in ipairs(candidates) do
 end
 
 if not bestEgg then
-    warn(("❌ Luck-Wert für Eggs %s konnte nicht ermittelt werden."):format(table.concat(eggNames, ", ")))
+    --warn(("❌ Luck-Wert für Eggs %s konnte nicht ermittelt werden."):format(table.concat(eggNames, ", ")))
     shared.eggCheckFinished = true
     return
 end
