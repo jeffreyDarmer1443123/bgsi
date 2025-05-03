@@ -126,9 +126,9 @@ local function loadServerIds()
     return ids
 end
 
-local function safeTeleportToInstance(gameId, serverId, player)
+local function safeTeleportToInstance(gameId, serverId)
     local ok, err = pcall(function()
-        TeleportService:TeleportToPlaceInstance(gameId, serverId, player)
+        TeleportService:TeleportToPlaceInstance(gameId, serverId)
     end)
     if not ok then
         warn("❗ TeleportToPlaceInstance fehlgeschlagen: " .. tostring(err))
@@ -152,7 +152,7 @@ local function tryHopServers(serverIds)
         writefile(serverFile, table.concat(serverIds, "\n"))
 
         print("🚀 Versuch #"..attempts..": Teleport zu "..serverId)
-        local ok, err = safeTeleportToInstance(gameId, serverId, player)
+        local ok, err = safeTeleportToInstance(gameId, serverId)
         if not ok then
             warn("❗ Teleport-Error: " .. tostring(err))
             wait(2)
