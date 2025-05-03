@@ -153,7 +153,7 @@ end
 local function safeTeleportToInstance(gameId, serverId)
     task.wait(1)
     local attempts = 0
-    while attempts < 5 do
+    while attempts < 25 do
         attempts += 1
         local ok, err = pcall(function()
             TeleportService:TeleportToPlaceInstance(gameId, serverId)
