@@ -1,6 +1,7 @@
 --// Verbesserte EggCheck.lua
 
 local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
 
 -- Sicherstellen, dass shared-Variablen existieren
 local requiredLuck = shared.requiredLuck
