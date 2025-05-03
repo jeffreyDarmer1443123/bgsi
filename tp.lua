@@ -206,9 +206,11 @@ local function main()
 
     -- Falls abgelaufener Cooldown oder keine IDs, Neues abrufen
     if os.time() >= (data.refreshCooldownUntil or 0) or #data.serverIds == 0 then
-        refreshServerIds(data)
-        -- Nach erfolgreichem Refresh die aktuellsten Daten neu einlesen
-        data = loadData()
+        if username == "plalns1" then
+            refreshServerIds(data)
+            -- Nach erfolgreichem Refresh die aktuellsten Daten neu einlesen
+            data = loadData()
+        end
     end
 
     -- Nach dem Refresh erneut prüfen, ob IDs vorhanden sind
