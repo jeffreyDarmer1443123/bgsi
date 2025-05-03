@@ -182,44 +182,40 @@ local function tryHopServers(data)
 end
 
 -- 🚀 Hauptfunktion
--- 🚀 Hauptfunktion mit Stale-Lock-Timeout
 local function main()
     local data = loadData()
 
-    -- Wenn gerade ein Refresh läuft, warte, bis er fertig ist, max. 60 s
+    -- 1) Wenn gerade ein Refresh läuft, max. 60 s darauf warten
     if data.refreshInProgress then
-        warn("❗ Serveraktualisierung läuft gerade auf anderem Client. Warte...")
+        warn("❗ Serveraktualisierung läuft gerade auf anderem Client. Warte…")
         local waitStart = os.time()
         repeat
             task.wait(1)
             data = loadData()
-            -- Timeout prüfen
             if os.time() - waitStart > 60 then
-                warn("❗ Wartezeit überschritten, setze Lock zurück.")
+                warn("❗ Wartezeit überschritten – setze Lock zurück.")
                 data.refreshInProgress = false
                 saveData(data)
                 break
             end
         until not data.refreshInProgress
-        print("ℹ️ Serveraktualisierung abgeschlossen oder Lock zurückgesetzt. Fahre fort.")
+        print("ℹ️ Serveraktualisierung abgeschlossen oder Lock zurückgesetzt.")
     end
 
-    -- Falls abgelaufener Cooldown oder keine IDs, Neues abrufen
+    -- 2) Immer dann neu holen, wenn Cooldown abgelaufen oder keine IDs da sind
     if os.time() >= (data.refreshCooldownUntil or 0) or #data.serverIds == 0 then
-        if username == "plalns1" then
-            refreshServerIds(data)
-            -- Nach erfolgreichem Refresh die aktuellsten Daten neu einlesen
-            data = loadData()
-        end
+        refreshServerIds(data)
+        -- nach dem Refresh unbedingt neu einlesen
+        data = loadData()
     end
 
-    -- Nach dem Refresh erneut prüfen, ob IDs vorhanden sind
+    -- 3) Nochmal prüfen, ob wir jetzt IDs haben
     if #data.serverIds == 0 then
         warn("❗ Keine Server-IDs verfügbar.")
         return
     end
 
-    -- Zum Hopp’n aufs nächste Game
+    -- 4) Und erst jetzt hoppeln wir los
     tryHopServers(data)
 end
 
