@@ -7,19 +7,20 @@ local requiredLuck = shared.requiredLuck
 local eggNames = shared.eggNames
 
 local webhookUrl = shared.webhookUrl
+local username = Players.LocalPlayer.Name
 
 if not requiredLuck then
-    warn("⚠️ Kein Luck in shared.requiredLuck definiert!")
+    warn(username .. "⚠️ Kein Luck in shared.requiredLuck definiert!")
     shared.eggCheckFinished = true
     return
 end
 if not eggNames then
-    warn("⚠️ Keine EggNames in shared.eggNames definiert!")
+    warn(username .. "⚠️ Keine EggNames in shared.eggNames definiert!")
     shared.eggCheckFinished = true
     return
 end
 if not webhookUrl then
-    warn("⚠️ Keine Webhook-URL in shared.webhookUrl definiert!")
+    warn(username .. "⚠️ Keine Webhook-URL in shared.webhookUrl definiert!")
     shared.eggCheckFinished = true
     return
 end
@@ -90,7 +91,7 @@ local function sendWebhookEmbed(eggName, luck, timeText, height, jobId, placeId)
 
     local success, res = safeRequest(requestArgs)
     if not success then
-        warn("❌ Webhook fehlgeschlagen: " .. tostring(res))
+        warn(username .. "❌ Webhook fehlgeschlagen: " .. tostring(res))
     end
 end
 
@@ -110,7 +111,7 @@ end
 -- Suche nach Eggs
 local rifts = workspace:FindFirstChild("Rendered") and workspace.Rendered:FindFirstChild("Rifts")
 if not rifts then
-    warn("❌ Ordner Workspace.Rendered.Rifts nicht gefunden.")
+    warn(username .. "❌ Ordner Workspace.Rendered.Rifts nicht gefunden.")
     shared.eggCheckFinished = true
     return
 end
@@ -209,7 +210,7 @@ if ok then
     )
     shared.foundEgg = false
     shared.eggCheckFinished = true
-    print("✅ Egg gefunden und gemeldet!")
+    print(username .. "✅ Egg gefunden und gemeldet!")
 else
     shared.eggCheckFinished = true
 end
