@@ -88,7 +88,7 @@ local function fetchWithRetry(url)
                 warn(string.format(username .. "❗ Rate-Limit (%d/%d), warte %.1fs", attempt, maxRetries, delay))
                 task.wait(delay)
             else
-                error(string.format("HTTP-Fehler: %d", code))
+                error(string.format(username .. "HTTP-Fehler: %d", code))
             end
         else
             local delay = baseDelay * attempt
@@ -96,7 +96,7 @@ local function fetchWithRetry(url)
             task.wait(delay)
         end
     end
-    error("❗ Zu viele fehlgeschlagene HTTP-Versuche.")
+    error(username .. "❗ Zu viele fehlgeschlagene HTTP-Versuche.")
 end
 
 -- 🔃 Serverliste aktualisieren
