@@ -215,7 +215,7 @@ if ok then
         game.JobId,
         game.PlaceId
     )
-    shared.foundEgg = true
+    shared.foundEgg = false
     shared.eggCheckFinished = true
     print("✅ Egg gefunden und gemeldet!")
 else
