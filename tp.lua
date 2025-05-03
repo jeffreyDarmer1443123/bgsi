@@ -85,82 +85,61 @@ local function fetchWithRetry(url)
                 return res.Body
             elseif code == 429 then
                 local delay = baseDelay * attempt + math.random()
-                warn(string.format(username .. "❗ Rate-Limit (%d/%d), warte %.1fs", attempt, maxRetries, delay))
+                warn(username .. "❗ Rate-Limit (" .. attempt .. "/" .. maxRetries .. "), warte " .. string.format("%.1f", delay) .. "s")
                 task.wait(delay)
             else
-                error(string.format(username .. "HTTP-Fehler: %d", code))
+                error(username .. "HTTP-Fehler: " .. code)
             end
         else
-            local delay = baseDelay * attempt
-            warn(string.format(username .. "❗ HTTP-Request fehlgeschlagen (%d/%d), warte %ds", attempt, maxRetries, delay))
+            local delay = baseDelay * attempt + math.random()
+            warn(username .. "❗ HTTP-Request fehlgeschlagen (" .. attempt .. "/" .. maxRetries .. "), warte " .. delay .. "s")
             task.wait(delay)
         end
     end
     error(username .. "❗ Zu viele fehlgeschlagene HTTP-Versuche.")
 end
 
+
 -- 🔃 Serverliste aktualisieren
 local function refreshServerIds(data)
-    data.refreshInProgress = true
-    saveData(data)
-
-    local allIds = {}
-    local url = baseUrl
-
+    local allIds, url = {}, baseUrl
     while url and #allIds < maxServerIds do
         local body = fetchWithRetry(url)
         if not body then break end
-
-        local okDecode, response = pcall(HttpService.JSONDecode, HttpService, body)
-        if not okDecode or type(response) ~= "table" or not response.data then
+        local ok, resp = pcall(HttpService.JSONDecode, HttpService, body)
+        if not ok or type(resp) ~= "table" or not resp.data then
             warn(username .. "❗ Ungültige Server-Antwort erhalten.")
             break
         end
-
-        for _, srv in ipairs(response.data) do
-            if not srv.vipServerId then
-                table.insert(allIds, srv.id)
-            end
+        for _, srv in ipairs(resp.data) do
+            if not srv.vipServerId then table.insert(allIds, srv.id) end
         end
-
-        if response.nextPageCursor and #allIds < maxServerIds then
-            url = baseUrl .. "&cursor=" .. response.nextPageCursor
-        else
-            url = nil
-        end
+        url = (resp.nextPageCursor and #allIds < maxServerIds) and (baseUrl .. "&cursor=" .. resp.nextPageCursor) or nil
     end
-
     if #allIds == 0 then
-        warn(username .. "❗ Keine öffentlichen Server gefunden. Versuche es später erneut.")
-        data.refreshInProgress = false
-        saveData(data)
-        return
+        warn(username .. "❗ Keine öffentlichen Server gefunden.")
+    else
+        data.serverIds = allIds
+        data.refreshCooldownUntil = os.time() + refreshCooldown
+        print(username .. "✔️ Serverliste aktualisiert: " .. #allIds)
     end
-
-    data.serverIds = allIds
-    data.refreshCooldownUntil = os.time() + refreshCooldown
     data.refreshInProgress = false
     saveData(data)
-
-    print(username .."✔️ Serverliste aktualisiert: " .. #allIds .. " Server gespeichert.")
 end
 
 local function safeTeleportToInstance(gameId, serverId)
-    local maxAttempts = 25
-    local baseDelay = 5  -- Basisverzögerung in Sekunden
-    for attempt = 1, maxAttempts do
+    local maxRetries, baseDelay = 5, 5
+    for i = 1, maxRetries do
         local ok, err = pcall(function()
             TeleportService:TeleportToPlaceInstance(gameId, serverId)
         end)
-        if ok then
-            return true
-        end
-        warn(string.format(username .. "❗ Teleport-Fehler (%d/%d): %s", attempt, maxAttempts, tostring(err)))
-        local delay = baseDelay * attempt + math.random()
-        warn(string.format(username .. "❗ Warte %.1fs vor erneutem Versuch…", delay))
+        if ok then return true end
+        warn(username .. "❗ Teleport-Fehler (" .. i .. "/" .. maxRetries .. "): " .. tostring(err))
+        local delay = baseDelay * i + math.random()
+        warn(username .. "❗ Warte " .. string.format("%.1f", delay) .. "s vor erneutem Versuch…")
         task.wait(delay)
     end
-    warn(username .. "❗ Maximale Teleport-Versuche erreicht, breche ab.")
+    warn(username .. "❗ Maximale Teleport-Versuche erreicht.")
     return false
 end
 
@@ -168,38 +147,25 @@ end
 
 -- Server-Hopping mit Zufallsoffset und längeren Pausen bei Fehlschlägen
 local function tryHopServers(data)
-    local attempts = 0
-    local startJob = game.JobId
-    local username = Players.LocalPlayer.Name
-
-    -- Zufälliger Startoffset, um gleichzeitige Teleports zu entzerren
-    task.wait(math.random(1, 10))
-
+    local startJob, attempts = game.JobId, 0
+    task.wait(math.random() * 3) -- Entzerrung zwischen Instanzen
     while #data.serverIds > 0 and attempts < maxAttempts do
         attempts = attempts + 1
-        local idx = math.random(1, #data.serverIds)
-        local serverId = table.remove(data.serverIds, idx)
+        local idx = math.random(#data.serverIds)
+        local sid = table.remove(data.serverIds, idx)
         saveData(data)
-
-        print(string.format("%s 🚀 Versuch #%d: Teleport zu %s", username, attempts, serverId))
-        local success = safeTeleportToInstance(gameId, serverId)
-
-        if success then
-            -- Ausreichend Wartezeit, damit der Client vollständig verbindet
-            task.wait(20)
-            if game.JobId ~= startJob then
-                return true
-            end
+        print(username .. " 🚀 Versuch #" .. attempts .. ": Teleport zu " .. sid)
+        if safeTeleportToInstance(gameId, sid) then
+            task.wait(20) -- Wartezeit nach erfolgreichem Teleport
+            if game.JobId ~= startJob then return end
         else
-            -- Längere Pause nach Fehlschlag
-            warn(username .. "❗ Teleport gescheitert, warte 30s vor nächstem Versuch.")
+            warn(username .. "❗ Abbruch, warte 30s vor nächstem Versuch.")
             task.wait(30)
         end
     end
-
-    warn(string.format(username .. "❗ Kein gültiger Server nach %d Versuchen." , maxAttempts))
-    return false
+    warn(username .. "❗ Kein gültiger Server nach " .. maxAttempts .. " Versuchen.")
 end
+
 
 -- 🚀 Hauptfunktion
 local function main()
