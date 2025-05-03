@@ -101,10 +101,16 @@ end
 
 
 -- 🔃 Serverliste aktualisieren
+-- 🔃 Angepasste Funktion: Serverliste aktualisieren (mit festem, benutzerbasiertem Offset + Zufallsanteil)
 local function refreshServerIds(data)
-    -- Zufälliger Jitter, damit nicht alle Instanzen gleichzeitig starten
-    local jitter = math.random(0, 5)
-    warn(username .. " ✨ Jitter vor Refresh: " .. jitter .. "s")
+    -- Benutzerbasierter Fix-Offset aus Username
+    local sum = 0
+    for i = 1, #username do
+        sum = sum + username:byte(i)
+    end
+    local baseOffset = sum % 5  -- 0–4 Sekunden, einzigartig pro Account
+    local jitter = baseOffset + math.random() * 2  -- plus 0–2s Zufall
+    warn(username .. " ✨ Refresh-Offset: " .. string.format("%.2f", jitter) .. "s")
     task.wait(jitter)
 
     local allIds, url = {}, baseUrl
@@ -137,6 +143,7 @@ local function refreshServerIds(data)
     data.refreshInProgress = false
     saveData(data)
 end
+
 
 local function safeTeleportToInstance(gameId, serverId)
     local maxRetries, baseDelay = 5, 5
