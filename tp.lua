@@ -75,33 +75,27 @@ end
 -- 🌐 Retry-fähiges HTTP-Fetch
 local function fetchWithRetry(url)
     local maxRetries = 5
-    local retries = 0
-
-    while retries <= maxRetries do
-        local ok, res = safeRequest({
-            Url = url,
-            Method = "GET",
-            Headers = { ["Content-Type"] = "application/json" },
-        })
-
+    local baseDelay = 5
+    for attempt = 1, maxRetries do
+        local ok, res = safeRequest({ Url = url, Method = "GET", Headers = { ["Content-Type"] = "application/json" } })
         if ok and res then
             local code = res.StatusCode or res.code
             if code == 200 then
                 return res.Body
             elseif code == 429 then
-                retries += 1
-                warn("❗ Rate-Limit erreicht, warte " .. (retries * 5) .. "s")
-                wait(retries * 5)
+                local delay = baseDelay * attempt + math.random()
+                warn(string.format("❗ Rate-Limit (%d/%d), warte %.1fs", attempt, maxRetries, delay))
+                task.wait(delay)
             else
-                warn("❗ HTTP-Fehler: " .. tostring(code))
-                return nil
+                error(string.format("HTTP-Fehler: %d", code))
             end
         else
-            retries += 1
+            local delay = baseDelay * attempt
+            warn(string.format("❗ HTTP-Request fehlgeschlagen (%d/%d), warte %ds", attempt, maxRetries, delay))
+            task.wait(delay)
         end
     end
-
-    warn("❗ Zu viele fehlgeschlagene HTTP-Versuche.")
+    error("❗ Zu viele fehlgeschlagene HTTP-Versuche.")
 end
 
 -- 🔃 Serverliste aktualisieren
@@ -151,57 +145,59 @@ local function refreshServerIds(data)
 end
 
 local function safeTeleportToInstance(gameId, serverId)
-    task.wait(1)
-    local attempts = 0
-    while attempts < 25 do
-        wait(attempts)
-        attempts += 1
+    local maxAttempts = 25
+    local baseDelay = 5  -- Basisverzögerung in Sekunden
+    for attempt = 1, maxAttempts do
         local ok, err = pcall(function()
             TeleportService:TeleportToPlaceInstance(gameId, serverId)
         end)
         if ok then
             return true
         end
-        if tostring(err):find("285") then
-            warn("❗ RateLimit, Warte 5s…")
-            task.wait(5)
-        else
-            warn("❗ Teleport-Fehler: "..tostring(err))
-            return false
-        end
+        warn(string.format("❗ Teleport-Fehler (%d/%d): %s", attempt, maxAttempts, tostring(err)))
+        local delay = baseDelay * attempt + math.random()
+        warn(string.format("❗ Warte %.1fs vor erneutem Versuch…", delay))
+        task.wait(delay)
     end
-    warn("❗ Zu viele Rate-Limit-Fehler, breche ab.")
+    warn("❗ Maximale Teleport-Versuche erreicht, breche ab.")
     return false
 end
 
 
 
--- 🔀 Versucht, Server zu wechseln
+-- Server-Hopping mit Zufallsoffset und längeren Pausen bei Fehlschlägen
 local function tryHopServers(data)
     local attempts = 0
     local startJob = game.JobId
     local username = Players.LocalPlayer.Name
 
-    while #data.serverIds > 0 and attempts < maxAttempts do
-        attempts += 1
-        local idx = math.random(1, #data.serverIds)
-        local serverId = data.serverIds[idx]
+    -- Zufälliger Startoffset, um gleichzeitige Teleports zu entzerren
+    task.wait(math.random(1, 10))
 
-        table.remove(data.serverIds, idx)
+    while #data.serverIds > 0 and attempts < maxAttempts do
+        attempts = attempts + 1
+        local idx = math.random(1, #data.serverIds)
+        local serverId = table.remove(data.serverIds, idx)
         saveData(data)
 
-        print(username .. " 🚀 Versuch #" .. attempts .. ": Teleport zu " .. serverId)
-        local ok, _ = safeTeleportToInstance(gameId, serverId)
+        print(string.format("%s 🚀 Versuch #%d: Teleport zu %s", username, attempts, serverId))
+        local success = safeTeleportToInstance(gameId, serverId)
 
-        if ok then
-            task.wait(5)
+        if success then
+            -- Ausreichend Wartezeit, damit der Client vollständig verbindet
+            task.wait(20)
             if game.JobId ~= startJob then
-                return
+                return true
             end
+        else
+            -- Längere Pause nach Fehlschlag
+            warn("❗ Teleport gescheitert, warte 30s vor nächstem Versuch.")
+            task.wait(30)
         end
     end
 
-    warn("❗ Kein gültiger Server nach " .. maxAttempts .. " Versuchen.")
+    warn(string.format("❗ Kein gültiger Server nach %d Versuchen." , maxAttempts))
+    return false
 end
 
 -- 🚀 Hauptfunktion
