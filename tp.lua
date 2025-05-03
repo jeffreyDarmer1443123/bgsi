@@ -189,7 +189,7 @@ end
 local function main()
     local data = loadData()
 
-    -- 1) Wenn gerade ein Refresh läuft, max. 60 s darauf warten
+    -- 1) Warten, falls bereits ein Refresh läuft
     if data.refreshInProgress then
         warn(username .. " ❗ Serveraktualisierung läuft gerade auf anderem Client. Warte…")
         local waitStart = os.time()
@@ -206,21 +206,30 @@ local function main()
         print(username .. " ℹ️ Serveraktualisierung abgeschlossen oder Lock zurückgesetzt.")
     end
 
-    -- 2) Immer dann neu holen, wenn Cooldown abgelaufen oder keine IDs da sind
+    -- 2) Refresh auslösen, wenn nötig
     if os.time() >= (data.refreshCooldownUntil or 0) or #data.serverIds == 0 then
-        refreshServerIds(data)
-        -- nach dem Refresh unbedingt neu einlesen
+        -- 🔒 Lock setzen BEVOR der Refresh startet
+        data.refreshInProgress = true
+        saveData(data)
+        
+        -- 🔄 Refresh mit Fehlerbehandlung
+        local success, err = pcall(refreshServerIds, data)
+        if not success then
+            warn(username .. " ❗ Refresh fehlgeschlagen: " .. tostring(err))
+            data.refreshInProgress = false
+            saveData(data)
+        end
+        
+        -- Daten neu einlesen
         data = loadData()
         print(username .. " ℹ️ Serverliste aktualisiert.")
     end
 
-    -- 3) Nochmal prüfen, ob wir jetzt IDs haben
+    -- 3) Server-Hopping starten
     if #data.serverIds == 0 then
         warn(username .. " ❗ Keine Server-IDs verfügbar.")
         return
     end
-
-    -- 4) Und erst jetzt hoppeln wir los
     tryHopServers(data)
 end
 
