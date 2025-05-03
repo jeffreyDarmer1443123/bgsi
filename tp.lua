@@ -1,183 +1,234 @@
--- tp.lua: Vollständig synchronisiertes Server-Hopping mit Atomic-Locks und Sharding
-
-local HttpService = game:GetService("HttpService")
-local TeleportService = game:GetService("TeleportService")
-local Players = game:GetService("Players")
+local HttpService      = game:GetService("HttpService")
+local TeleportService  = game:GetService("TeleportService")
+local Players          = game:GetService("Players")
 
 -- Konfiguration
 local gameId = 85896571713843
 local baseUrl = "https://games.roblox.com/v1/games/"..gameId.."/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100"
 local dataFile = "server_data.json"
-local lockFile = "server_lock.json"
+local refreshCooldown = shared.refreshCooldown or 300        -- 5 Min.
+local maxAttempts = shared.maxAttempts or 5
+local maxServerIds = shared.maxServerIds or 200
+local lockTimeout = shared.lockTimeout or 60,
+local baseDelay = shared.lockTimeout or 5
 local username = Players.LocalPlayer.Name
 
--- Shared Config
-local config = {
-    refreshCooldown = shared.refreshCooldown or 300,
-    maxAttempts = shared.maxAttempts or 5,
-    maxServerIds = shared.maxServerIds or 200,
-    maxAccounts = 5  -- Anpassen an tatsächliche Account-Anzahl
-}
 
--- 🔧 Atomic Lock Management
-local function acquireLock()
-    local lockData = {
-        owner = username,
-        timestamp = os.time(),
-        version = (readfile(lockFile) and HttpService:JSONDecode(readfile(lockFile)).version or 0
-    }
-    
-    writefile(lockFile, HttpService:JSONEncode(lockData))
-    return lockData
-end
-
-local function checkLock()
-    if not isfile(lockFile) then return false end
-    local success, data = pcall(function()
-        return HttpService:JSONDecode(readfile(lockFile))
-    end)
-    return success and data or false
-end
-
--- 🔄 Datenmanagement
-local function loadServerData()
+-- 🔄 JSON Speicherfunktionen (unverändert)
+local function loadData()
     if not isfile(dataFile) then
-        return {serverIds = {}, lastUpdated = 0}
+        return {
+            serverIds = {},
+            refreshCooldownUntil = 0,
+            refreshInProgress = false,
+            lockOwner = nil,
+            lockTimestamp = 0
+        }
     end
-    return HttpService:JSONDecode(readfile(dataFile))
+
+    local content = readfile(dataFile)
+    local success, result = pcall(HttpService.JSONDecode, HttpService, content)
+    return success and result or {
+        serverIds = {},
+        refreshCooldownUntil = 0,
+        refreshInProgress = false,
+        lockOwner = nil,
+        lockTimestamp = 0
+    }
 end
 
-local function saveServerData(data)
+local function saveData(data)
     writefile(dataFile, HttpService:JSONEncode(data))
 end
 
--- 🌐 Verbesserte HTTP-Funktionen
-local function safeRequest(url)
-    local methods = {syn.request, fluxus.request, http.request, request, http_request}
-    for _, method in ipairs(methods) do
-        if method then
-            local ok, response = pcall(method, {
-                Url = url,
-                Method = "GET",
-                Headers = {["Content-Type"] = "application/json"}
-            })
-            if ok and response.StatusCode == 200 then
-                return response.Body
+-- 🌐 Safe HTTP-Request Utility (unverändert)
+local function safeRequest(opts)
+    local methods = {}
+    if syn and syn.request then table.insert(methods, syn.request) end
+    if fluxus and fluxus.request then table.insert(methods, fluxus.request) end
+    if http and http.request then table.insert(methods, http.request) end
+    if request then table.insert(methods, request) end
+    if http_request then table.insert(methods, http_request) end
+
+    table.insert(methods, function(o)
+        return HttpService:RequestAsync({
+            Url = o.Url,
+            Method = o.Method,
+            Headers = o.Headers,
+            Body = o.Body,
+        })
+    end)
+
+    for _, fn in ipairs(methods) do
+        local ok, res = pcall(fn, opts)
+        if ok and type(res) == "table" then
+            local code = res.StatusCode or res.code or 0
+            if (res.Success ~= false) and (code >= 200 and code < 300) then
+                return true, res
             end
         end
     end
-    error("Alle HTTP-Methoden fehlgeschlagen")
+
+    return false, "Kein erfolgreicher HTTP-Call"
 end
 
-local function fetchPaginatedServers()
-    local servers = {}
-    local cursor
-    repeat
-        local url = cursor and (baseUrl.."&cursor="..cursor) or baseUrl
-        local body = safeRequest(url)
-        local data = HttpService:JSONDecode(body)
-        
-        for _, server in ipairs(data.data) do
-            if not server.vipServerId then
-                table.insert(servers, server.id)
-            end
+-- 🔄 Verbesserte Synchronisationslogik
+local function acquireLock(data)
+    -- Prüfe auf bestehendes Lock
+    if data.refreshInProgress then
+        -- Lock ist abgelaufen?
+        if os.time() - data.lockTimestamp > config.lockTimeout then
+            warn(username.." 🔓 Übernehme abgelaufenen Lock von "..(data.lockOwner or "unknown"))
+            return true
         end
-        cursor = data.nextPageCursor
-    until not cursor or #servers >= config.maxServerIds
-    
-    return servers
-end
-
--- 🔄 Synchronisierte Serveraktualisierung
-local function refreshServerList()
-    local lock = checkLock()
-    if lock and os.time() - lock.timestamp < 60 then
-        local waitTime = math.random(5, 15)
-        warn(username.." ⏳ Warte auf bestehenden Refresh ("..lock.owner..") - "..waitTime.."s")
-        task.wait(waitTime)
         return false
     end
-
-    acquireLock()
-    local servers = fetchPaginatedServers()
     
-    local serverData = {
-        serverIds = servers,
-        lastUpdated = os.time(),
-        cooldown = os.time() + config.refreshCooldown
-    }
-    
-    saveServerData(serverData)
-    delfile(lockFile)
+    -- Setze neuen Lock
+    data.refreshInProgress = true
+    data.lockOwner = username
+    data.lockTimestamp = os.time()
+    saveData(data)
     return true
 end
 
--- 🎯 Sharded Server-Hopping
-local function getShardSlice(servers)
-    local total = #servers
-    local shard = (tonumber(string.match(username, "%d+")) or 1) % config.maxAccounts
-    local sliceSize = math.ceil(total / config.maxAccounts)
-    
-    local start = (shard * sliceSize) + 1
-    local finish = math.min(start + sliceSize - 1, total)
-    
-    return {table.unpack(servers, start, finish)}
+local function releaseLock(data)
+    data.refreshInProgress = false
+    data.lockOwner = nil
+    data.lockTimestamp = 0
+    saveData(data)
 end
 
-local function teleportWithRetry(serverId)
-    for attempt = 1, config.maxAttempts do
-        local success = pcall(function()
+-- 🔄 Verbesserte Serverlist-Aktualisierung
+local function refreshServerIds()
+    local data = loadData()
+    
+    -- Versuche Lock zu erhalten mit zufälliger Verzögerung
+    math.randomseed(os.clock()*1e6)
+    task.wait(math.random(0, 3)) -- Anti-Flood
+    
+    if not acquireLock(data) then
+        warn(username.." ⏳ Warte auf bestehenden Lock von "..data.lockOwner)
+        local waitStart = os.time()
+        while os.time() - waitStart < config.lockTimeout do
+            task.wait(2)
+            data = loadData()
+            if not data.refreshInProgress then break end
+        end
+        if data.refreshInProgress then
+            warn(username.." ⚠️ Lock-Timeout, erzwinge Übernahme")
+            releaseLock(data)
+        end
+        return refreshServerIds() -- Rekursiver Neustart
+    end
+
+    -- Eigentlicher Refresh-Prozess
+    warn(username.." 🔒 Lock erhalten - Starte Aktualisierung")
+    local allIds, url = {}, baseUrl
+    while url and #allIds < config.maxServerIds do
+        local success, res = safeRequest({Url = url, Method = "GET"})
+        if not success then
+            warn(username.." ❗ Kritischer HTTP-Fehler - Breche ab")
+            releaseLock(data)
+            error("HTTP Request failed")
+        end
+
+        local ok, resp = pcall(HttpService.JSONDecode, HttpService, res.Body)
+        if not ok then
+            warn(username.." ❗ Ungültige Server-Antwort")
+            break
+        end
+
+        for _, srv in ipairs(resp.data or {}) do
+            if not srv.vipServerId then
+                table.insert(allIds, srv.id)
+            end
+        end
+        url = resp.nextPageCursor and (baseUrl.."&cursor="..resp.nextPageCursor) or nil
+    end
+
+    -- Update Daten
+    data.serverIds = allIds
+    data.refreshCooldownUntil = os.time() + config.refreshCooldown
+    releaseLock(data)
+    warn(username.." ✔️ Serverliste aktualisiert ("..#allIds.." Server)")
+end
+
+-- 🚀 Verbesserte Teleport-Funktion (unverändert)
+local function safeTeleportToInstance(gameId, serverId)
+    local maxRetries = config.maxAttempts
+    for i = 1, maxRetries do
+        local ok, err = pcall(function()
             TeleportService:TeleportToPlaceInstance(gameId, serverId)
         end)
+        if ok then return true end
         
-        if success then
-            task.wait(20)
-            return true
-        end
-        
-        local delay = math.pow(2, attempt) + math.random()
-        warn(username.." 🔄 Teleport-Versuch "..attempt.."/"..config.maxAttempts.." fehlgeschlagen - Warte "..delay.."s")
+        -- Exponentielles Backoff mit Jitter
+        local delay = math.pow(config.baseDelay, i) + math.random()
+        warn(username.." 🔄 Teleport-Versuch "..i.."/"..maxRetries.." - Warte "..string.format("%.1f", delay).."s")
         task.wait(delay)
     end
     return false
 end
 
-local function tryHopServers()
-    local serverData = loadServerData()
-    if os.time() < serverData.cooldown then
-        warn(username.." ⏸️ Cooldown aktiv ("..(serverData.cooldown - os.time()).."s verbleibend)")
-        return
+-- 🔄 Hauptsteuerung mit Sicherheitschecks
+local function main()
+    local data = loadData()
+    
+    -- 1) Cooldown-Check
+    if os.time() < data.refreshCooldownUntil and #data.serverIds > 0 then
+        warn(username.." ⏲️ Cooldown aktiv ("..(data.refreshCooldownUntil - os.time()).."s)")
+        return tryHopServers(data)
     end
 
-    local servers = getShardSlice(serverData.serverIds)
-    if #servers == 0 then
-        error(username.." ❗ Keine Server im Slice verfügbar")
+    -- 2) Serverlist-Update erforderlich
+    local success, err = pcall(refreshServerIds)
+    if not success then
+        warn(username.." ❗ Kritischer Fehler beim Refresh: "..tostring(err))
+        task.wait(config.baseDelay * 2)
+        return main() -- Neustart
     end
 
-    for _, serverId in ipairs(servers) do
-        if teleportWithRetry(serverId) then
-            return
+    -- 3) Erneuter Ladeversuch
+    data = loadData()
+    if #data.serverIds == 0 then
+        error(username.." ❗ Keine Server verfügbar nach Refresh")
+    end
+
+    -- 4) Server-Hopping
+    tryHopServers(data)
+end
+
+-- 🎯 Unveränderte Hopping-Logik
+local function tryHopServers(data)
+    local startJobId = game.JobId
+    local attempts = 0
+    
+    while attempts < config.maxAttempts do
+        attempts += 1
+        if #data.serverIds == 0 then break end
+        
+        local idx = math.random(#data.serverIds)
+        local sid = table.remove(data.serverIds, idx)
+        saveData(data)
+
+        warn(username.." 🚀 Versuch #"..attempts..": "..sid)
+        if safeTeleportToInstance(gameId, sid) then
+            task.wait(20) -- Erfolgswartezeit
+            if game.JobId ~= startJobId then return end
         end
     end
     
-    error(username.." ❗ Alle Shard-Server versucht")
+    warn(username.." ❗ Maximale Versuche erreicht")
 end
 
--- 🚀 Hauptsteuerung
-local function main()
-    math.randomseed(os.time() * #username:byte(1))
-    
-    if not refreshServerList() then
-        tryHopServers()
-    end
-end
-
--- ▶️ Ausführung
+-- ▶️ Gesicherte Ausführung
 while true do
     local success, err = pcall(main)
     if not success then
-        warn(username.." ❗ Kritischer Fehler: "..err)
-        task.wait(60)
+        warn(username.." ⚠️ Fehler in Hauptschleife: "..tostring(err))
+        warn(username.." ⏳ Neustart in 30s...")
+        task.wait(30)
     end
-    task.wait(5)
+    task.wait(1) -- Grundverzögerung
 end
