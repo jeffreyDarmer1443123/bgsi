@@ -16,25 +16,27 @@ local username = Players.LocalPlayer.Name
 
 -- 🔄 JSON Speicherfunktionen (unverändert)
 local function loadData()
-    if not isfile(dataFile) then
-        return {
-            serverIds = {},
-            refreshCooldownUntil = 0,
-            refreshInProgress = false,
-            lockOwner = nil,
-            lockTimestamp = 0
-        }
-    end
-
-    local content = readfile(dataFile)
-    local success, result = pcall(HttpService.JSONDecode, HttpService, content)
-    return success and result or {
+    local defaultData = {
         serverIds = {},
-        refreshCooldownUntil = 0,
+        refreshCooldownUntil = 0,  -- Sicherstellen, dass immer ein Wert vorhanden ist
         refreshInProgress = false,
         lockOwner = nil,
         lockTimestamp = 0
     }
+
+    if not isfile(dataFile) then
+        return defaultData
+    end
+
+    local content = readfile(dataFile)
+    local success, result = pcall(HttpService.JSONDecode, HttpService, content)
+    
+    -- Führe einen Deep Merge mit Default-Werten durch
+    if success and type(result) == "table" then
+        return setmetatable(result, {__index = defaultData})
+    end
+    
+    return defaultData
 end
 
 local function saveData(data)
@@ -103,55 +105,61 @@ end
 local function refreshServerIds()
     local data = loadData()
     
-    -- Versuche Lock zu erhalten mit zufälliger Verzögerung
-    math.randomseed(os.clock()*1e6)
-    task.wait(math.random(0, 3)) -- Anti-Flood
-    
-    if not acquireLock(data) then
-        warn(username.." ⏳ Warte auf bestehenden Lock von "..data.lockOwner)
+    -- Anti-Flood mit seed
+    math.randomseed(tick())
+    task.wait(math.random() * 3)
+
+    -- Lock-Handling mit Timeout
+    local lockAcquired = acquireLock(data)
+    if not lockAcquired then
         local waitStart = os.time()
-        while os.time() - waitStart < lockTimeout do
+        repeat
             task.wait(2)
             data = loadData()
-            if not data.refreshInProgress then break end
-        end
+        until not data.refreshInProgress or (os.time() - waitStart) > lockTimeout
+        
         if data.refreshInProgress then
-            warn(username.." ⚠️ Lock-Timeout, erzwinge Übernahme")
+            warn(username.." ⚠️ Lock-Timeout - Erzwinge Übernahme")
             releaseLock(data)
         end
-        return refreshServerIds() -- Rekursiver Neustart
+        return refreshServerIds()
     end
 
-    -- Eigentlicher Refresh-Prozess
-    warn(username.." 🔒 Lock erhalten - Starte Aktualisierung")
-    local allIds, url = {}, baseUrl
-    while url and #allIds < maxServerIds do
-        local success, res = safeRequest({Url = url, Method = "GET"})
+    -- HTTP-Request mit verbessertem Handling
+    local allIds = {}
+    local nextCursor = ""
+    repeat
+        local url = baseUrl..(nextCursor ~= "" and "&cursor="..nextCursor or "")
+        local success, response = pcall(safeRequest, {Url = url, Method = "GET"})
+        
         if not success then
-            warn(username.." ❗ Kritischer HTTP-Fehler - Breche ab")
             releaseLock(data)
-            error("HTTP Request failed")
+            error("HTTP-Request fehlgeschlagen: "..tostring(response))
         end
 
-        local ok, resp = pcall(HttpService.JSONDecode, HttpService, res.Body)
-        if not ok then
-            warn(username.." ❗ Ungültige Server-Antwort")
-            break
-        end
-
-        for _, srv in ipairs(resp.data or {}) do
-            if not srv.vipServerId then
+        local decoded = HttpService:JSONDecode(response.Body)
+        nextCursor = decoded.nextPageCursor or ""
+        
+        -- Serverfilterung mit nil-Sicherung
+        for _, srv in ipairs(decoded.data or {}) do
+            if srv and srv.id and not srv.vipServerId then
                 table.insert(allIds, srv.id)
             end
         end
-        url = resp.nextPageCursor and (baseUrl.."&cursor="..resp.nextPageCursor) or nil
-    end
+    until nextCursor == "" or #allIds >= maxServerIds
 
-    -- Update Daten
-    data.serverIds = allIds
-    data.refreshCooldownUntil = os.time() + refreshCooldown
+    -- Speichern mit Validierung
+    if #allIds > 0 then
+        data.serverIds = allIds
+        data.refreshCooldownUntil = os.time() + refreshCooldown
+        saveData(data)
+        warn(username.." ✔️ Aktualisiert ("..#allIds.." Server)")
+    else
+        warn(username.." ⚠️ Leere Serverliste erhalten")
+    end
+    
     releaseLock(data)
-    warn(username.." ✔️ Serverliste aktualisiert ("..#allIds.." Server)")
+    return true
 end
 
 -- 🚀 Verbesserte Teleport-Funktion (unverändert)
@@ -175,27 +183,28 @@ end
 local function main()
     local data = loadData()
     
-    -- 1) Cooldown-Check
-    if os.time() < data.refreshCooldownUntil and #data.serverIds > 0 then
-        warn(username.." ⏲️ Cooldown aktiv ("..(data.refreshCooldownUntil - os.time()).."s)")
+    -- 1) Sicherheitscheck für Cooldown-Wert
+    local cooldownRemaining = (data.refreshCooldownUntil or 0) - os.time()
+    if cooldownRemaining > 0 and #data.serverIds > 0 then
+        warn(username.." ⏲️ Cooldown aktiv ("..math.floor(cooldownRemaining).."s)")
         return tryHopServers(data)
     end
 
-    -- 2) Serverlist-Update erforderlich
+    -- 2) Serverlist-Update mit verbessertem Error-Handling
     local success, err = pcall(refreshServerIds)
     if not success then
-        warn(username.." ❗ Kritischer Fehler beim Refresh: "..tostring(err))
+        warn(username.." ❗ Fehler beim Refresh: "..tostring(err):sub(1, 100))
         task.wait(baseDelay * 2)
-        return main() -- Neustart
+        return main()
     end
 
-    -- 3) Erneuter Ladeversuch
+    -- 3) Erneuter Ladeversuch mit Sicherheitscheck
     data = loadData()
-    if #data.serverIds == 0 then
-        error(username.." ❗ Keine Server verfügbar nach Refresh")
+    if not data.serverIds or #data.serverIds == 0 then
+        error(username.." ❗ Keine Server nach Refresh")
     end
 
-    -- 4) Server-Hopping
+    -- 4) Teleport mit zusätzlichen Checks
     tryHopServers(data)
 end
 
