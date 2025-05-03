@@ -160,6 +160,7 @@ end
 local function tryHopServers(data)
     local attempts = 0
     local startJob = game.JobId
+    local username = Players.LocalPlayer.Name
 
     while #data.serverIds > 0 and attempts < maxAttempts do
         attempts += 1
@@ -169,7 +170,7 @@ local function tryHopServers(data)
         table.remove(data.serverIds, idx)
         saveData(data)
 
-        print("🚀 Versuch #" .. attempts .. ": Teleport zu " .. serverId)
+        print("🚀 Versuch" .. username .. "#" .. attempts .. ": Teleport zu " .. serverId)
         task.wait(1)
         local ok, _ = safeTeleportToInstance(gameId, serverId)
 
