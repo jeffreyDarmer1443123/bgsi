@@ -128,9 +128,9 @@ end
 
 -- Pcall-geschützter Teleport-Aufruf, übergibt UserId-Array
 -- Pcall-geschützter Teleport-Aufruf, übergibt Player-Objekt in Tabelle
-local function safeTeleportToInstance(placeId, jobId, player)
+local function safeTeleportToInstance(placeId, jobId)
     local ok, err = pcall(function()
-        TeleportService:TeleportToPlaceInstance(placeId, jobId, { player })
+        TeleportService:TeleportToPlaceInstance(placeId, jobId)
     end)
     if not ok then
         warn("❗ TeleportToPlaceInstance fehlgeschlagen: " .. tostring(err))
@@ -153,7 +153,7 @@ local function tryHopServers(serverIds)
         writefile(serverFile, table.concat(serverIds, "\n"))
 
         print("🚀 Versuch #"..attempts..": Teleport zu "..serverId)
-        local ok, err = safeTeleportToInstance(gameId, serverId, Players.LocalPlayer)
+        local ok, err = safeTeleportToInstance(gameId, serverId)
         if not ok then
             warn("❗ Teleport-Error: " .. tostring(err))
             wait(2)
