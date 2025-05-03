@@ -162,9 +162,9 @@ local function tryHopServers(serverIds)
             task.wait(5)
             if game.JobId ~= startJob then
                 return
-            else
-                warn("❗ Noch auf demselben Server, neuer Versuch…")
-                task.wait(2)
+            --else
+                --warn("❗ Noch auf demselben Server, neuer Versuch…")
+                --task.wait(2)
             end
         end
     end
