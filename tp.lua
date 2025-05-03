@@ -6,11 +6,11 @@ local Players          = game:GetService("Players")
 local gameId = 85896571713843
 local baseUrl = "https://games.roblox.com/v1/games/"..gameId.."/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100"
 local dataFile = "server_data.json"
-local refreshCooldown = shared.refreshCooldown or 300        -- 5 Min.
-local maxAttempts = shared.maxAttempts or 5
+local refreshCooldown = shared.refreshCooldown or 60
+local maxAttempts = shared.maxAttempts or 25
 local maxServerIds = shared.maxServerIds or 200
-local lockTimeout = shared.lockTimeout or 60,
-local baseDelay = shared.lockTimeout or 5
+local lockTimeout = shared.lockTimeout or 60
+local baseDelay = shared.baseDelay or 5
 local username = Players.LocalPlayer.Name
 
 
@@ -77,7 +77,7 @@ local function acquireLock(data)
     -- Prüfe auf bestehendes Lock
     if data.refreshInProgress then
         -- Lock ist abgelaufen?
-        if os.time() - data.lockTimestamp > config.lockTimeout then
+        if os.time() - data.lockTimestamp > lockTimeout then
             warn(username.." 🔓 Übernehme abgelaufenen Lock von "..(data.lockOwner or "unknown"))
             return true
         end
@@ -110,7 +110,7 @@ local function refreshServerIds()
     if not acquireLock(data) then
         warn(username.." ⏳ Warte auf bestehenden Lock von "..data.lockOwner)
         local waitStart = os.time()
-        while os.time() - waitStart < config.lockTimeout do
+        while os.time() - waitStart < lockTimeout do
             task.wait(2)
             data = loadData()
             if not data.refreshInProgress then break end
@@ -125,7 +125,7 @@ local function refreshServerIds()
     -- Eigentlicher Refresh-Prozess
     warn(username.." 🔒 Lock erhalten - Starte Aktualisierung")
     local allIds, url = {}, baseUrl
-    while url and #allIds < config.maxServerIds do
+    while url and #allIds < maxServerIds do
         local success, res = safeRequest({Url = url, Method = "GET"})
         if not success then
             warn(username.." ❗ Kritischer HTTP-Fehler - Breche ab")
@@ -149,14 +149,14 @@ local function refreshServerIds()
 
     -- Update Daten
     data.serverIds = allIds
-    data.refreshCooldownUntil = os.time() + config.refreshCooldown
+    data.refreshCooldownUntil = os.time() + refreshCooldown
     releaseLock(data)
     warn(username.." ✔️ Serverliste aktualisiert ("..#allIds.." Server)")
 end
 
 -- 🚀 Verbesserte Teleport-Funktion (unverändert)
 local function safeTeleportToInstance(gameId, serverId)
-    local maxRetries = config.maxAttempts
+    local maxRetries = maxAttempts
     for i = 1, maxRetries do
         local ok, err = pcall(function()
             TeleportService:TeleportToPlaceInstance(gameId, serverId)
@@ -164,7 +164,7 @@ local function safeTeleportToInstance(gameId, serverId)
         if ok then return true end
         
         -- Exponentielles Backoff mit Jitter
-        local delay = math.pow(config.baseDelay, i) + math.random()
+        local delay = math.pow(baseDelay, i) + math.random()
         warn(username.." 🔄 Teleport-Versuch "..i.."/"..maxRetries.." - Warte "..string.format("%.1f", delay).."s")
         task.wait(delay)
     end
@@ -185,7 +185,7 @@ local function main()
     local success, err = pcall(refreshServerIds)
     if not success then
         warn(username.." ❗ Kritischer Fehler beim Refresh: "..tostring(err))
-        task.wait(config.baseDelay * 2)
+        task.wait(baseDelay * 2)
         return main() -- Neustart
     end
 
@@ -204,7 +204,7 @@ local function tryHopServers(data)
     local startJobId = game.JobId
     local attempts = 0
     
-    while attempts < config.maxAttempts do
+    while attempts < maxAttempts do
         attempts += 1
         if #data.serverIds == 0 then break end
         
