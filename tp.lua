@@ -43,6 +43,28 @@ local function saveData(data)
     writefile(dataFile, HttpService:JSONEncode(data))
 end
 
+local function tryHopServers(data)
+    local startJobId = game.JobId
+    local attempts = 0
+    
+    while attempts < maxAttempts do
+        attempts += 1
+        if #data.serverIds == 0 then break end
+        
+        local idx = math.random(#data.serverIds)
+        local sid = table.remove(data.serverIds, idx)
+        saveData(data)
+
+        warn(username.." 🚀 Versuch #"..attempts..": "..sid)
+        if safeTeleportToInstance(gameId, sid) then
+            task.wait(20) -- Erfolgswartezeit
+            if game.JobId ~= startJobId then return end
+        end
+    end
+    
+    warn(username.." ❗ Maximale Versuche erreicht")
+end
+
 -- 🌐 Safe HTTP-Request Utility (unverändert)
 local function safeRequest(opts)
     local methods = {}
@@ -305,29 +327,6 @@ local function main()
     end
     
     error(username.." ❗ Kritischer Fehler ("..(lastError or "unbekannt")..") nach "..maxRestarts.." Versuchen")
-end
-
--- 🎯 Unveränderte Hopping-Logik
-local function tryHopServers(data)
-    local startJobId = game.JobId
-    local attempts = 0
-    
-    while attempts < maxAttempts do
-        attempts += 1
-        if #data.serverIds == 0 then break end
-        
-        local idx = math.random(#data.serverIds)
-        local sid = table.remove(data.serverIds, idx)
-        saveData(data)
-
-        warn(username.." 🚀 Versuch #"..attempts..": "..sid)
-        if safeTeleportToInstance(gameId, sid) then
-            task.wait(20) -- Erfolgswartezeit
-            if game.JobId ~= startJobId then return end
-        end
-    end
-    
-    warn(username.." ❗ Maximale Versuche erreicht")
 end
 
 -- ▶️ Gesicherte Ausführung
