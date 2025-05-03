@@ -167,7 +167,7 @@ local function tryHopServers(data)
         table.remove(data.serverIds, idx)
         saveData(data)
 
-        print(.. username .. " 🚀 Versuch #" .. attempts .. ": Teleport zu " .. serverId)
+        print(username .. " 🚀 Versuch #" .. attempts .. ": Teleport zu " .. serverId)
         local ok, _ = safeTeleportToInstance(gameId, serverId)
 
         if ok then
