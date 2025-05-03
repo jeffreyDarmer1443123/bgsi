@@ -79,7 +79,7 @@ local function fetchWithRetry(url)
         end
     end
 
-    error("❗ Zu viele Fehlversuche beim HTTP-Request.")
+    warn("❗ Zu viele Fehlversuche beim HTTP-Request.")
 end
 
 -- Aktualisiert und speichert Server-IDs
