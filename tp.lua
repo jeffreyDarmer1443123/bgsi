@@ -182,22 +182,33 @@ local function tryHopServers(data)
 end
 
 -- 🚀 Hauptfunktion
+-- 🚀 Hauptfunktion mit Stale-Lock-Timeout
 local function main()
     local data = loadData()
 
-    -- Wenn gerade ein Refresh läuft, warte, bis er fertig ist
+    -- Wenn gerade ein Refresh läuft, warte, bis er fertig ist, max. 60 s
     if data.refreshInProgress then
         warn("❗ Serveraktualisierung läuft gerade auf anderem Client. Warte...")
+        local waitStart = os.time()
         repeat
             task.wait(1)
             data = loadData()
+            -- Timeout prüfen
+            if os.time() - waitStart > 60 then
+                warn("❗ Wartezeit überschritten, setze Lock zurück.")
+                data.refreshInProgress = false
+                saveData(data)
+                break
+            end
         until not data.refreshInProgress
-        print("ℹ️ Serveraktualisierung abgeschlossen. Fahre fort.")
+        print("ℹ️ Serveraktualisierung abgeschlossen oder Lock zurückgesetzt. Fahre fort.")
     end
 
     -- Falls abgelaufener Cooldown oder keine IDs, Neues abrufen
     if os.time() >= (data.refreshCooldownUntil or 0) or #data.serverIds == 0 then
         refreshServerIds(data)
+        -- Nach erfolgreichem Refresh die aktuellsten Daten neu einlesen
+        data = loadData()
     end
 
     -- Nach dem Refresh erneut prüfen, ob IDs vorhanden sind
