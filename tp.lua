@@ -3,14 +3,13 @@
 -- Safe HTTP-Request Utility für verschiedene Exploiter
 local HttpService = game:GetService("HttpService")
 
-local function safeRequest(opts)
+eval(function()
     local methods = {}
     if syn and syn.request      then table.insert(methods, syn.request)      end
     if fluxus and fluxus.request then table.insert(methods, fluxus.request) end
     if http and http.request    then table.insert(methods, http.request)    end
     if request                  then table.insert(methods, request)         end
     if http_request             then table.insert(methods, http_request)    end
-    -- Fallback auf HttpService
     table.insert(methods, function(o)
         return HttpService:RequestAsync({
             Url     = o.Url,
@@ -20,21 +19,22 @@ local function safeRequest(opts)
         })
     end)
 
-    for _, fn in ipairs(methods) do
-        local ok, res = pcall(fn, opts)
-        if ok and type(res) == "table" then
-            local code = res.StatusCode or res.code or 0
-            if (res.Success ~= false) and (code >= 200 and code < 300) then
-                return true, res
+    return function(opts)
+        for _, fn in ipairs(methods) do
+            local ok, res = pcall(fn, opts)
+            if ok and type(res) == "table" then
+                local code = res.StatusCode or res.code or 0
+                if (res.Success ~= false) and (code >= 200 and code < 300) then
+                    return true, res
+                end
             end
         end
+        return false, "Kein einziger HTTP-Call hat erfolgreich geantwortet."
     end
-
-    return false, "Kein einziger HTTP-Call hat erfolgreich geantwortet."
-end
+end)()
 
 -- Seed für Zufallszahlengenerator
-math.randomseed(os.time())
+math.randomseed(tick())
 
 -- Services
 local TeleportService = game:GetService("TeleportService")
@@ -42,24 +42,30 @@ local Players         = game:GetService("Players")
 
 -- Konfiguration
 local gameId         = 85896571713843
-local baseUrl        = "https://games.roblox.com/v1/games/"..gameId.."/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100"
+local baseUrl        = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100", gameId)
 local serverFile     = "server_ids.txt"
 local cooldownFile   = "server_refresh_time.txt"
-local refreshCooldown= shared.refreshCooldown     -- in Sekunden
-local maxAttempts    = shared.maxAttempts       -- Maximal 5 Server-Versuche
-local maxServerIds   = shared.maxServerIds    -- Maximal 200 Server-IDs
+local refreshCooldown= 60      -- in Sekunden
+local maxAttempts    = 5       -- Maximal 5 Server-Versuche
+
+-- Funktion: TeleportToPlaceInstance sicher aufrufen
+local function safeTeleportToInstance(placeId, jobId, player)
+    local ok, err = pcall(function()
+        TeleportService:TeleportToPlaceInstance(placeId, jobId, { player })
+    end)
+    if not ok then
+        warn("❗ Teleport fehlgeschlagen: " .. tostring(err))
+    end
+    return ok, err
+end
 
 -- Holt JSON mit Retry-Logik
 local function fetchWithRetry(url)
     local maxRetries = 5
-    local retries   = 0
+    local retries    = 0
 
     while retries <= maxRetries do
-        local ok, res = safeRequest({
-            Url     = url,
-            Method  = "GET",
-            Headers = { ["Content-Type"] = "application/json" },
-        })
+        local ok, res = safeRequest({ Url = url, Method = "GET", Headers = { ["Content-Type"] = "application/json" } })
         if ok and res then
             local code = res.StatusCode or res.code
             if code == 200 then
@@ -67,8 +73,8 @@ local function fetchWithRetry(url)
             elseif code == 429 then
                 retries = retries + 1
                 local waitTime = 5 * retries
-                warn("❗ Rate-Limit erreicht, warte "..waitTime.."s ("..retries.."/"..maxRetries..")")
-                wait(waitTime)
+                warn("❗ Rate-Limit, warte "..waitTime.."s ("..retries.."/"..maxRetries..")")
+                task.wait(waitTime)
             else
                 warn("❗ HTTP-Error: "..tostring(code))
                 return nil
@@ -79,7 +85,7 @@ local function fetchWithRetry(url)
         end
     end
 
-    warn("❗ Zu viele Fehlversuche beim HTTP-Request.")
+    error("❗ Zu viele Fehlversuche beim HTTP-Request.")
 end
 
 -- Aktualisiert und speichert Server-IDs
@@ -87,19 +93,19 @@ local function refreshServerIds()
     local allIds = {}
     local url    = baseUrl
 
-    while url and #allIds < maxServerIds do
+    while url and #allIds < 200 do
         local body = fetchWithRetry(url)
         if not body then break end
 
         local data = HttpService:JSONDecode(body)
         for _, srv in ipairs(data.data) do
-            if not srv.vipServerId and #allIds < maxServerIds then
+            if not srv.vipServerId and #allIds < 200 then
                 table.insert(allIds, srv.id)
             end
         end
 
-        if data.nextPageCursor and #allIds < maxServerIds then
-            url = baseUrl.."&cursor="..data.nextPageCursor
+        if data.nextPageCursor and #allIds < 200 then
+            url = baseUrl .. "&cursor=" .. data.nextPageCursor
         else
             url = nil
         end
@@ -117,9 +123,7 @@ end
 
 -- Lädt gespeicherte Server-IDs aus Datei
 local function loadServerIds()
-    if not isfile(serverFile) then
-        return {}
-    end
+    if not isfile(serverFile) then return {} end
     local ids = {}
     for line in readfile(serverFile):gmatch("[^\r\n]+") do
         table.insert(ids, line)
@@ -127,46 +131,26 @@ local function loadServerIds()
     return ids
 end
 
-local function safeTeleportToInstance(gameId, serverId)
-    local ok, err = pcall(function()
-        TeleportService:TeleportToPlaceInstance(gameId, serverId)
-    end)
-    if not ok then
-        warn("❗ TeleportToPlaceInstance fehlgeschlagen: " .. tostring(err))
-    end
-    return ok, err
-end
-
 -- Hoppt zufällig durch bis Erfolg
 local function tryHopServers(serverIds)
-    local attempts  = 0
-    local startJob  = game.JobId
+    local attempts = 0
+    local startJob = game.JobId
 
     while #serverIds > 0 and attempts < maxAttempts do
         attempts = attempts + 1
-        local idx      = math.random(1, #serverIds)
-        local serverId = serverIds[idx]
-        local player = Players.LocalPlayer
-
-        -- entfernen und speichern
-        table.remove(serverIds, idx)
+        local idx = math.random(1, #serverIds)
+        local serverId = table.remove(serverIds, idx)
         writefile(serverFile, table.concat(serverIds, "\n"))
 
         print("🚀 Versuch #"..attempts..": Teleport zu "..serverId)
-        task.wait(3)
-        local ok, err = safeTeleportToInstance(gameId, serverId)
-        if not ok then
-            warn("❗ Teleport-Error: " .. tostring(err))
-            task.wait(2)
+        local ok = safeTeleportToInstance(gameId, serverId, Players.LocalPlayer)
+        task.wait(8)
+        if ok and game.JobId ~= startJob then
+            print("✅ Server gewechselt: "..serverId)
+            return
         else
-            task.wait(8)
-            if game.JobId ~= startJob then
-                print("✅ Erfolgreich neuen Server betreten: "..serverId)
-                return
-            else
-                warn("❗ Noch auf demselben Server, neuer Versuch…")
-                task.wait(2)
-            end
+            warn("❗ Wechsel fehlgeschlagen, neuer Versuch...")
+            task.wait(2)
         end
     end
 
@@ -189,8 +173,13 @@ local function main()
 
     local serverIds = loadServerIds()
     if #serverIds == 0 then
-        warn("❗ Keine Server-IDs verfügbar!")
-        return
+        warn("❗ Keine Server-IDs verfügbar, erneutes Laden...")
+        refreshServerIds()
+        serverIds = loadServerIds()
+        if #serverIds == 0 then
+            warn("❗ Immer noch keine Server-IDs gefunden, breche ab.")
+            return
+        end
     end
 
     tryHopServers(serverIds)
