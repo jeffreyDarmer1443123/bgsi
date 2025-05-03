@@ -187,6 +187,7 @@ local function main()
 
     if data.refreshInProgress then
         warn("❗ Serveraktualisierung läuft gerade auf anderem Client. Bitte warten.")
+        main()
         return
     end
 
