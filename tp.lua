@@ -185,21 +185,28 @@ end
 local function main()
     local data = loadData()
 
+    -- Wenn gerade ein Refresh läuft, warte, bis er fertig ist
     if data.refreshInProgress then
-        warn("❗ Serveraktualisierung läuft gerade auf anderem Client. Bitte warten.")
-        main()
-        return
+        warn("❗ Serveraktualisierung läuft gerade auf anderem Client. Warte...")
+        repeat
+            task.wait(1)
+            data = loadData()
+        until not data.refreshInProgress
+        print("ℹ️ Serveraktualisierung abgeschlossen. Fahre fort.")
     end
 
+    -- Falls abgelaufener Cooldown oder keine IDs, Neues abrufen
     if os.time() >= (data.refreshCooldownUntil or 0) or #data.serverIds == 0 then
         refreshServerIds(data)
     end
 
+    -- Nach dem Refresh erneut prüfen, ob IDs vorhanden sind
     if #data.serverIds == 0 then
         warn("❗ Keine Server-IDs verfügbar.")
         return
     end
 
+    -- Zum Hopp’n aufs nächste Game
     tryHopServers(data)
 end
 
