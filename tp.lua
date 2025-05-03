@@ -65,28 +65,36 @@ local function safeRequest(opts)
         local ok, res = pcall(fn, opts)
         if ok and type(res) == "table" then
             local code = res.StatusCode or res.code or 0
-            if (res.Success ~= false) and (code >= 200 and code < 300) then
-                return true, res
+            if code >= 200 and code < 300 then
+                return true, {
+                    Body = res.Body or res.response,
+                    StatusCode = code
+                }
             end
+            return false, "HTTP-"..tostring(code)
         end
     end
-
-    return false, "Kein erfolgreicher HTTP-Call"
+    return false, "Alle HTTP-Methoden fehlgeschlagen"
 end
 
 -- 🔄 Verbesserte Synchronisationslogik
+-- 🔄 Verbessertes Lock-Handling
 local function acquireLock(data)
-    -- Prüfe auf bestehendes Lock
     if data.refreshInProgress then
-        -- Lock ist abgelaufen?
-        if os.time() - data.lockTimestamp > lockTimeout then
-            warn(username.." 🔓 Übernehme abgelaufenen Lock von "..(data.lockOwner or "unknown"))
+        -- Validiere Lock-Zeitstempel
+        if type(data.lockTimestamp) ~= "number" then
+            data.lockTimestamp = 0
+        end
+        
+        local lockAge = os.time() - data.lockTimestamp
+        if lockAge > lockTimeout then
+            warn(username.." 🔓 Übernehme abgelaufenen Lock (Alter: "..lockAge.."s)")
             return true
         end
         return false
     end
     
-    -- Setze neuen Lock
+    -- Setze neuen Lock mit Validierung
     data.refreshInProgress = true
     data.lockOwner = username
     data.lockTimestamp = os.time()
@@ -130,19 +138,29 @@ local function refreshServerIds()
     local nextCursor = ""
     repeat
         local url = baseUrl..(nextCursor ~= "" and "&cursor="..nextCursor or "")
-        local success, response = pcall(safeRequest, {Url = url, Method = "GET"})
+        local httpSuccess, response = safeRequest({Url = url, Method = "GET"})
         
-        if not success then
+        if not httpSuccess then
             releaseLock(data)
             error("HTTP-Request fehlgeschlagen: "..tostring(response))
         end
 
-        local decoded = HttpService:JSONDecode(response.Body)
+        -- JSON-Decoding mit Fehlerabfang
+        local decoded
+        local decodeSuccess, err = pcall(function()
+            decoded = HttpService:JSONDecode(response.Body)
+        end)
+        
+        if not decodeSuccess or not decoded then
+            releaseLock(data)
+            error("Invalid JSON: "..tostring(err))
+        end
+
         nextCursor = decoded.nextPageCursor or ""
         
-        -- Serverfilterung mit nil-Sicherung
+        -- Serverfilterung mit erweiterten nil-Checks
         for _, srv in ipairs(decoded.data or {}) do
-            if srv and srv.id and not srv.vipServerId then
+            if type(srv) == "table" and srv.id and not srv.vipServerId then
                 table.insert(allIds, srv.id)
             end
         end
@@ -180,32 +198,113 @@ local function safeTeleportToInstance(gameId, serverId)
 end
 
 -- 🔄 Hauptsteuerung mit Sicherheitschecks
+-- 🔄 Hauptsteuerung mit erweitertem Error-Handling
 local function main()
-    local data = loadData()
+    local maxRestarts = 3
+    local restartCount = 0
+    local lastError
     
-    -- 1) Sicherheitscheck für Cooldown-Wert
-    local cooldownRemaining = (data.refreshCooldownUntil or 0) - os.time()
-    if cooldownRemaining > 0 and #data.serverIds > 0 then
-        warn(username.." ⏲️ Cooldown aktiv ("..math.floor(cooldownRemaining).."s)")
-        return tryHopServers(data)
-    end
+    while restartCount < maxRestarts do
+        local data = loadData()
+        
+        -- 1) Cooldown-Check mit Validierung
+        local currentTime = os.time()
+        local cooldownValid = type(data.refreshCooldownUntil) == "number"
+        local cooldownActive = cooldownValid and (data.refreshCooldownUntil > currentTime)
+        
+        if cooldownActive and #data.serverIds > 0 then
+            local remaining = data.refreshCooldownUntil - currentTime
+            warn(username.." ⏲️ Cooldown aktiv ("..math.floor(remaining).."s)")
+            return tryHopServers(data)
+        end
 
-    -- 2) Serverlist-Update mit verbessertem Error-Handling
-    local success, err = pcall(refreshServerIds)
-    if not success then
-        warn(username.." ❗ Fehler beim Refresh: "..tostring(err):sub(1, 100))
-        task.wait(baseDelay * 2)
-        return main()
-    end
+        -- 2) Serverlist-Update mit erweitertem Lock-Handling
+        local refreshSuccess, refreshError = pcall(function()
+            -- Lock-Mechanismus mit Deadlock-Prävention
+            local lockAttempts = 0
+            repeat
+                lockAttempts += 1
+                data = loadData()
+                
+                if acquireLock(data) then
+                    warn(username.." 🔒 Lock erhalten (Versuch "..lockAttempts..")")
+                    break
+                else
+                    local lockOwner = data.lockOwner or "unknown"
+                    local lockAge = currentTime - (data.lockTimestamp or 0)
+                    warn(username.." ⏳ Warte auf Lock von "..lockOwner.." ("..lockAge.."s)")
+                    task.wait(math.random(2, 5))
+                end
+            until lockAttempts >= 3
+            
+            -- HTTP-Request mit Response-Validierung
+            local allIds = {}
+            local nextCursor = ""
+            repeat
+                local url = baseUrl..(nextCursor ~= "" and "&cursor="..nextCursor or "")
+                local httpOk, response = safeRequest({Url = url, Method = "GET"})
+                
+                if not httpOk then
+                    error("HTTP-Fehler: "..tostring(response))
+                end
+                
+                -- JSON-Decoding mit Fehlerstack
+                local decodeOk, decoded = pcall(HttpService.JSONDecode, HttpService, response.Body)
+                if not decodeOk then
+                    error("JSON-Parserfehler: "..tostring(decoded))
+                end
+                
+                nextCursor = decoded.nextPageCursor or ""
+                
+                -- Server-Validierung
+                for _, srv in ipairs(decoded.data or {}) do
+                    if type(srv) == "table" and srv.id and not srv.vipServerId then
+                        table.insert(allIds, srv.id)
+                    end
+                end
+            until nextCursor == "" or #allIds >= maxServerIds
+            
+            -- Datenvalidierung vor dem Speichern
+            if #allIds < 10 then
+                error("Unzureichende Server ("..#allIds..")")
+            end
+            
+            data.serverIds = allIds
+            data.refreshCooldownUntil = currentTime + refreshCooldown
+            saveData(data)
+        end)
 
-    -- 3) Erneuter Ladeversuch mit Sicherheitscheck
-    data = loadData()
-    if not data.serverIds or #data.serverIds == 0 then
-        error(username.." ❗ Keine Server nach Refresh")
+        -- 3) Error-Handling
+        if not refreshSuccess then
+            lastError = tostring(refreshError):sub(1, 100)
+            warn(username.." ❗ Refresh-Fehler: "..lastError)
+            
+            -- Lock-Cleanup bei Fehlern
+            pcall(function()
+                local data = loadData()
+                if data.lockOwner == username then
+                    releaseLock(data)
+                    warn(username.." 🔓 Lock nach Fehler freigegeben")
+                end
+            end)
+            
+            restartCount += 1
+            local delay = math.min(30, math.pow(2, restartCount) + math.random())
+            warn(username.." ⏳ Neustart "..restartCount.."/"..maxRestarts.." in "..delay.."s")
+            task.wait(delay)
+        else
+            -- 4) Erfolgreiches Hopping
+            data = loadData()
+            if not data.serverIds or #data.serverIds == 0 then
+                error("Kritischer Fehler: Leere Liste nach Refresh")
+            end
+            
+            warn(username.." ✅ Erfolgreich aktualisiert ("..#data.serverIds.." Server)")
+            return tryHopServers(data)
+        end
     end
-
-    -- 4) Teleport mit zusätzlichen Checks
-    tryHopServers(data)
+    
+    error(username.." ❗ Kritischer Fehler ("..(lastError or "unbekannt")..") nach "..maxRestarts.." Versuchen")
 end
 
 -- 🎯 Unveränderte Hopping-Logik
