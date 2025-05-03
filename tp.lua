@@ -85,18 +85,18 @@ local function fetchWithRetry(url)
                 return res.Body
             elseif code == 429 then
                 local delay = baseDelay * attempt + math.random()
-                warn(username .. "❗ Rate-Limit (" .. attempt .. "/" .. maxRetries .. "), warte " .. string.format("%.1f", delay) .. "s")
+                warn(username .. " ❗ Rate-Limit (" .. attempt .. "/" .. maxRetries .. "), warte " .. string.format("%.1f", delay) .. "s")
                 task.wait(delay)
             else
-                error(username .. "HTTP-Fehler: " .. code)
+                error(username .. " HTTP-Fehler: " .. code)
             end
         else
             local delay = baseDelay * attempt + math.random()
-            warn(username .. "❗ HTTP-Request fehlgeschlagen (" .. attempt .. "/" .. maxRetries .. "), warte " .. delay .. "s")
+            warn(username .. " ❗ HTTP-Request fehlgeschlagen (" .. attempt .. "/" .. maxRetries .. "), warte " .. delay .. "s")
             task.wait(delay)
         end
     end
-    error(username .. "❗ Zu viele fehlgeschlagene HTTP-Versuche.")
+    error(username .. " ❗ Zu viele fehlgeschlagene HTTP-Versuche.")
 end
 
 
@@ -104,7 +104,7 @@ end
 local function refreshServerIds(data)
     -- Zufälliger Jitter, damit nicht alle Instanzen gleichzeitig starten
     local jitter = math.random(0, 5)
-    warn(username .. "✨ Jitter vor Refresh: " .. jitter .. "s")
+    warn(username .. " ✨ Jitter vor Refresh: " .. jitter .. "s")
     task.wait(jitter)
 
     local allIds, url = {}, baseUrl
@@ -113,7 +113,7 @@ local function refreshServerIds(data)
         if not body then break end
         local ok, resp = pcall(HttpService.JSONDecode, HttpService, body)
         if not ok or type(resp) ~= "table" or not resp.data then
-            warn(username .. "❗ Ungültige Server-Antwort erhalten.")
+            warn(username .. " ❗ Ungültige Server-Antwort erhalten.")
             break
         end
         for _, srv in ipairs(resp.data) do
@@ -127,11 +127,11 @@ local function refreshServerIds(data)
     end
 
     if #allIds == 0 then
-        warn(username .. "❗ Keine öffentlichen Server gefunden.")
+        warn(username .. " ❗ Keine öffentlichen Server gefunden.")
     else
         data.serverIds = allIds
         data.refreshCooldownUntil = os.time() + refreshCooldown
-        print(username .. "✔️ Serverliste aktualisiert: " .. #allIds)
+        print(username .. " ✔️ Serverliste aktualisiert: " .. #allIds)
     end
 
     data.refreshInProgress = false
@@ -145,12 +145,12 @@ local function safeTeleportToInstance(gameId, serverId)
             TeleportService:TeleportToPlaceInstance(gameId, serverId)
         end)
         if ok then return true end
-        warn(username .. "❗ Teleport-Fehler (" .. i .. "/" .. maxRetries .. "): " .. tostring(err))
+        warn(username .. " ❗ Teleport-Fehler (" .. i .. "/" .. maxRetries .. "): " .. tostring(err))
         local delay = baseDelay * i + math.random()
-        warn(username .. "❗ Warte " .. string.format("%.1f", delay) .. "s vor erneutem Versuch…")
+        warn(username .. " ❗ Warte " .. string.format("%.1f", delay) .. "s vor erneutem Versuch…")
         task.wait(delay)
     end
-    warn(username .. "❗ Maximale Teleport-Versuche erreicht.")
+    warn(username .. " ❗ Maximale Teleport-Versuche erreicht.")
     return false
 end
 
@@ -170,11 +170,11 @@ local function tryHopServers(data)
             task.wait(20) -- Wartezeit nach erfolgreichem Teleport
             if game.JobId ~= startJob then return end
         else
-            warn(username .. "❗ Abbruch, warte 30s vor nächstem Versuch.")
+            warn(username .. " ❗ Abbruch, warte 30s vor nächstem Versuch.")
             task.wait(30)
         end
     end
-    warn(username .. "❗ Kein gültiger Server nach " .. maxAttempts .. " Versuchen.")
+    warn(username .. " ❗ Kein gültiger Server nach " .. maxAttempts .. " Versuchen.")
 end
 
 
@@ -184,19 +184,19 @@ local function main()
 
     -- 1) Wenn gerade ein Refresh läuft, max. 60 s darauf warten
     if data.refreshInProgress then
-        warn(username .. "❗ Serveraktualisierung läuft gerade auf anderem Client. Warte…")
+        warn(username .. " ❗ Serveraktualisierung läuft gerade auf anderem Client. Warte…")
         local waitStart = os.time()
         repeat
             task.wait(1)
             data = loadData()
             if os.time() - waitStart > 60 then
-                warn(username .. "❗ Wartezeit überschritten – setze Lock zurück.")
+                warn(username .. " ❗ Wartezeit überschritten – setze Lock zurück.")
                 data.refreshInProgress = false
                 saveData(data)
                 break
             end
         until not data.refreshInProgress
-        print(username .. "ℹ️ Serveraktualisierung abgeschlossen oder Lock zurückgesetzt.")
+        print(username .. " ℹ️ Serveraktualisierung abgeschlossen oder Lock zurückgesetzt.")
     end
 
     -- 2) Immer dann neu holen, wenn Cooldown abgelaufen oder keine IDs da sind
@@ -204,12 +204,12 @@ local function main()
         refreshServerIds(data)
         -- nach dem Refresh unbedingt neu einlesen
         data = loadData()
-        print(username .. "ℹ️ Serverliste aktualisiert.")
+        print(username .. " ℹ️ Serverliste aktualisiert.")
     end
 
     -- 3) Nochmal prüfen, ob wir jetzt IDs haben
     if #data.serverIds == 0 then
-        warn(username .. "❗ Keine Server-IDs verfügbar.")
+        warn(username .. " ❗ Keine Server-IDs verfügbar.")
         return
     end
 
