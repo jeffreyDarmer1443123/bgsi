@@ -150,25 +150,29 @@ local function refreshServerIds(data)
     print("✔️ Serverliste aktualisiert: " .. #allIds .. " Server gespeichert.")
 end
 
--- 🧭 Reason-285-robustes Teleportieren
 local function safeTeleportToInstance(gameId, serverId)
     task.wait(1)
-    local ok, err = pcall(function()
-        TeleportService:TeleportToPlaceInstance(gameId, serverId)
-    end)
-    if not ok then
-        local msg = tostring(err)
-        if msg:match("285") then
-            warn("❗ TeleportRateLimit (Reason 285) erreicht, warte 5s und versuche erneut.")
+    local attempts = 0
+    while attempts < 5 do
+        attempts += 1
+        local ok, err = pcall(function()
+            TeleportService:TeleportToPlaceInstance(gameId, serverId)
+        end)
+        if ok then
+            return true
+        end
+        if tostring(err):find("285") then
+            warn("❗ RateLimit, Warte 5s…")
             task.wait(5)
-            -- <<< unbounded recursive Aufruf
-            return safeTeleportToInstance(gameId, serverId)
         else
-            warn("❗ Teleport-Fehler: "..msg)
+            warn("❗ Teleport-Fehler: "..tostring(err))
+            return false
         end
     end
-    return ok, err
+    warn("❗ Zu viele Rate-Limit-Fehler, breche ab.")
+    return false
 end
+
 
 
 -- 🔀 Versucht, Server zu wechseln
