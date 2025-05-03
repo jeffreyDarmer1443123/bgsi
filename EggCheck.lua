@@ -124,10 +124,7 @@ if manEgg then
         yInfo = (" | Y=%.2f"):format(outputPart.Position.Y)
     end
     local timeInfo = timeText and (" | Zeit übrig: " .. timeText) or ""
-    print(("✅ 'silly-egg': Luck %s%s%s"):format(luck or "n/A", timeInfo, yInfo))
-else
-    print("ℹ️ Kein 'silly-egg' gefunden.")
-end
+
 
 -- Suche nach passenden Eiern
 local candidates = {}
@@ -204,9 +201,6 @@ local message = ("%s '%s': Luck %d %s %d%s%s")
     :format(icon, bestEgg.Name, bestLuck, comp, requiredLuck, timeInfo, yInfo)
 
 if ok then
-    print(message)
-    print("📡 Sende Webhook...")
-
     sendWebhookEmbed(
         bestEgg.Name,
         bestLuck,

@@ -161,7 +161,6 @@ local function tryHopServers(serverIds)
         else
             task.wait(5)
             if game.JobId ~= startJob then
-                print("✅ Erfolgreich neuen Server betreten: "..serverId)
                 return
             else
                 warn("❗ Noch auf demselben Server, neuer Versuch…")
