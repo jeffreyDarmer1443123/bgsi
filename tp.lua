@@ -152,26 +152,21 @@ end
 
 -- 🧭 Reason-285-robustes Teleportieren
 local function safeTeleportToInstance(gameId, serverId)
-    -- kurze Pause vor jedem Teleport, um Rate-Limits zu vermeiden
     task.wait(1)
-
     local ok, err = pcall(function()
         TeleportService:TeleportToPlaceInstance(gameId, serverId)
     end)
-
     if not ok then
         local msg = tostring(err)
-        -- catchen von Reason 285 (TeleportRateLimit)
         if msg:match("285") then
             warn("❗ TeleportRateLimit (Reason 285) erreicht, warte 5s und versuche erneut.")
             task.wait(5)
-            -- retry rekursiv
+            -- <<< unbounded recursive Aufruf
             return safeTeleportToInstance(gameId, serverId)
         else
-            warn("❗ Teleport-Fehler: " .. msg)
+            warn("❗ Teleport-Fehler: "..msg)
         end
     end
-
     return ok, err
 end
 
