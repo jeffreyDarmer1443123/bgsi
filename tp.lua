@@ -207,6 +207,7 @@ local function main()
         refreshServerIds(data)
         -- nach dem Refresh unbedingt neu einlesen
         data = loadData()
+        print("ℹ️ Serverliste aktualisiert.")
     end
 
     -- 3) Nochmal prüfen, ob wir jetzt IDs haben
