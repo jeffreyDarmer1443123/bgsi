@@ -102,6 +102,11 @@ end
 
 -- 🔃 Serverliste aktualisieren
 local function refreshServerIds(data)
+    -- Zufälliger Jitter, damit nicht alle Instanzen gleichzeitig starten
+    local jitter = math.random(0, 5)
+    warn(username .. "✨ Jitter vor Refresh: " .. jitter .. "s")
+    task.wait(jitter)
+
     local allIds, url = {}, baseUrl
     while url and #allIds < maxServerIds do
         local body = fetchWithRetry(url)
@@ -112,10 +117,15 @@ local function refreshServerIds(data)
             break
         end
         for _, srv in ipairs(resp.data) do
-            if not srv.vipServerId then table.insert(allIds, srv.id) end
+            if not srv.vipServerId then
+                table.insert(allIds, srv.id)
+            end
         end
-        url = (resp.nextPageCursor and #allIds < maxServerIds) and (baseUrl .. "&cursor=" .. resp.nextPageCursor) or nil
+        url = (resp.nextPageCursor and #allIds < maxServerIds)
+              and (baseUrl .. "&cursor=" .. resp.nextPageCursor)
+              or nil
     end
+
     if #allIds == 0 then
         warn(username .. "❗ Keine öffentlichen Server gefunden.")
     else
@@ -123,6 +133,7 @@ local function refreshServerIds(data)
         data.refreshCooldownUntil = os.time() + refreshCooldown
         print(username .. "✔️ Serverliste aktualisiert: " .. #allIds)
     end
+
     data.refreshInProgress = false
     saveData(data)
 end
