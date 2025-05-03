@@ -98,7 +98,6 @@ local function fetchWithRetry(url)
             end
         else
             retries += 1
-            task.wait(2)
         end
     end
 
@@ -129,8 +128,6 @@ local function refreshServerIds(data)
         else
             url = nil
         end
-
-        task.wait(1)
     end
 
     if #allIds == 0 then
@@ -171,11 +168,10 @@ local function tryHopServers(data)
         saveData(data)
 
         print("🚀 Versuch" .. username .. "#" .. attempts .. ": Teleport zu " .. serverId)
-        task.wait(1)
         local ok, _ = safeTeleportToInstance(gameId, serverId)
 
         if ok then
-            task.wait(3)
+            task.wait(2)
             if game.JobId ~= startJob then
                 return
             end
