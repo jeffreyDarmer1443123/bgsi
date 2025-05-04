@@ -6,6 +6,7 @@ local Players = game:GetService("Players")
 -- Sicherstellen, dass shared-Variablen existieren
 local requiredLuck = shared.requiredLuck
 local eggNames = shared.eggNames
+local PrioEgg = shared.PrioEgg
 
 local webhookUrl = shared.webhookUrl
 local username = Players.LocalPlayer.Name
@@ -59,9 +60,9 @@ end
 -- Webhook Funktion
 -- Anpassen der sendWebhookEmbed-Funktion
 local function sendWebhookEmbed(eggName, luck, timeText, height, jobId, placeId)
-    local isSilly = (eggName:lower() == "silly-egg")
-    local color   = isSilly and 0x9B59B6 or 0x2ECC71
-    local mention = isSilly and "<@palkins7>" or ""
+    local isPrioEgg = (eggName:lower() == PrioEgg)
+    local color   = isPrioEgg and 0x9B59B6 or 0x2ECC71
+    local mention = isPrioEgg and "<@palkins7>" or ""
 
     local serverLink = ("https://jeffreydarmer1443123.github.io/?placeId=%d&gameInstanceId=%s")
                       :format(placeId, jobId)
@@ -117,7 +118,7 @@ if not rifts then
     return
 end
 
-local MillEgg = rifts:FindFirstChild("silly-egg")
+local MillEgg = rifts:FindFirstChild(PrioEgg)
 if MillEgg then
     local luck, timeText = getEggStats(MillEgg)
     local yInfo = ""
@@ -143,7 +144,7 @@ end
 -- Suche nach passenden Eiern
 local candidates = {}
 for _, eggFolder in ipairs(rifts:GetChildren()) do
-    if eggFolder.Name ~= "silly-egg" and table.find(eggNames, eggFolder.Name) then
+    if eggFolder.Name ~= PrioEgg and table.find(eggNames, eggFolder.Name) then
         table.insert(candidates, eggFolder)
     end
 end
