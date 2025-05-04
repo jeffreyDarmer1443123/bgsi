@@ -6,6 +6,7 @@ local Players = game:GetService("Players")
 -- Sicherstellen, dass shared-Variablen existieren
 local requiredLuck = shared.requiredLuck
 local eggNames = shared.eggNames
+local PrioEgg = shared.PrioEgg
 
 local webhookUrl = shared.webhookUrl
 local username = Players.LocalPlayer.Name
@@ -117,7 +118,7 @@ if not rifts then
     return
 end
 
-local MillEgg = rifts:FindFirstChild("silly-egg")
+local MillEgg = rifts:FindFirstChild(PrioEgg)
 if MillEgg then
     local luck, timeText = getEggStats(MillEgg)
     local outputPart = MillEgg:FindFirstChild("Output")
