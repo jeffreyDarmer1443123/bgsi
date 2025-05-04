@@ -120,21 +120,32 @@ end
 
 local function acquireLock(data)
     if data.refreshInProgress then
-        -- Validiere Lock-Zeitstempel
+        -- Lock-Zeit verifizieren
         if type(data.lockTimestamp) ~= "number" then
             data.lockTimestamp = 0
         end
 
         local lockAge = os.time() - data.lockTimestamp
         if lockAge > lockTimeout then
-            -- 🔄 Nochmals verifizieren vor Übernahme
-            task.wait(math.random(1, 3))  -- ❗ kleine Verzögerung, um Race Conditions zu entschärfen
-            local freshData = loadData()
-            if not freshData.refreshInProgress or (os.time() - (freshData.lockTimestamp or 0)) > lockTimeout then
-                warn(username.." 🔓 Übernehme abgelaufenen Lock (Alter: "..lockAge.."s)")
+            -- 💤 Leichte Verzögerung zur Entzerrung
+            task.wait(math.random(1, 3))
+
+            -- 🔄 Lade erneut, um sicherzustellen, dass niemand schneller war
+            local updated = loadData()
+            local updatedAge = os.time() - (updated.lockTimestamp or 0)
+
+            if not updated.refreshInProgress or updatedAge > lockTimeout then
+                warn(username.." 🔓 Übernehme abgelaufenen Lock (Alter: "..updatedAge.."s)")
+
+                -- Jetzt schreiben wir den Lock (aktualisiert)
+                updated.refreshInProgress = true
+                updated.lockOwner = username
+                updated.lockTimestamp = os.time()
+                saveData(updated)
+
                 return true
             else
-                warn(username.." ⚠️ Lock wurde doch übernommen von "..tostring(freshData.lockOwner))
+                warn(username.." ❌ Lock doch übernommen von "..tostring(updated.lockOwner))
                 return false
             end
         end
@@ -142,13 +153,14 @@ local function acquireLock(data)
         return false
     end
 
-    -- Setze neuen Lock mit Validierung
+    -- Kein aktiver Lock: setze neuen
     data.refreshInProgress = true
     data.lockOwner = username
     data.lockTimestamp = os.time()
     saveData(data)
     return true
 end
+
 
 
 local function releaseLock(data)
