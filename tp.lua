@@ -118,23 +118,30 @@ local function safeRequest(opts)
     return false, "Alle HTTP-Methoden fehlgeschlagen"
 end
 
--- 🔄 Verbesserte Synchronisationslogik
--- 🔄 Verbessertes Lock-Handling
 local function acquireLock(data)
     if data.refreshInProgress then
         -- Validiere Lock-Zeitstempel
         if type(data.lockTimestamp) ~= "number" then
             data.lockTimestamp = 0
         end
-        
+
         local lockAge = os.time() - data.lockTimestamp
         if lockAge > lockTimeout then
-            warn(username.." 🔓 Übernehme abgelaufenen Lock (Alter: "..lockAge.."s)")
-            return true
+            -- 🔄 Nochmals verifizieren vor Übernahme
+            task.wait(math.random(1, 3))  -- ❗ kleine Verzögerung, um Race Conditions zu entschärfen
+            local freshData = loadData()
+            if not freshData.refreshInProgress or (os.time() - (freshData.lockTimestamp or 0)) > lockTimeout then
+                warn(username.." 🔓 Übernehme abgelaufenen Lock (Alter: "..lockAge.."s)")
+                return true
+            else
+                warn(username.." ⚠️ Lock wurde doch übernommen von "..tostring(freshData.lockOwner))
+                return false
+            end
         end
+
         return false
     end
-    
+
     -- Setze neuen Lock mit Validierung
     data.refreshInProgress = true
     data.lockOwner = username
@@ -142,6 +149,7 @@ local function acquireLock(data)
     saveData(data)
     return true
 end
+
 
 local function releaseLock(data)
     data.refreshInProgress = false
