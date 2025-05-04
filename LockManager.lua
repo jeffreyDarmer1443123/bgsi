@@ -41,26 +41,25 @@ function LockManager.Acquire(username, timeout)
     timeout = timeout or defaultTimeout
 
     local initial = readLock()
+    local age = now() - (initial.lockTimestamp or 0)
 
-    if initial.refreshInProgress then
-        local age = now() - (initial.lockTimestamp or 0)
-        if age < timeout then
-            -- 🔒 Lock ist noch gültig
-            return false, "Lock aktiv von "..tostring(initial.lockOwner)
-        end
-
-        -- 💤 Warten, um Kollisionen zu vermeiden
-        task.wait(math.random(1, 2))
-
-        -- 🔄 Zweiter Check
-        local latest = readLock()
-        local latestAge = now() - (latest.lockTimestamp or 0)
-        if latest.refreshInProgress and latestAge < timeout then
-            return false, "Lock wurde übernommen von "..tostring(latest.lockOwner)
-        end
+    -- 🧤 Schutz vor zu frühem Zugriff
+    if initial.refreshInProgress and age < timeout then
+        return false, "Lock aktiv von "..tostring(initial.lockOwner)
     end
 
-    -- 🔏 Setze neuen Lock
+    -- 💤 Verzögerung vor Schreibzugriff (Entzerrung)
+    task.wait(math.random(1, 3))
+
+    -- 🧪 Nachprüfen, ob sich jemand anderes den Lock geholt hat
+    local current = readLock()
+    local currentAge = now() - (current.lockTimestamp or 0)
+
+    if current.refreshInProgress and currentAge < timeout then
+        return false, "Lock wurde gerade übernommen von "..tostring(current.lockOwner)
+    end
+
+    -- 📝 Jetzt sicheren Lock setzen
     local newLock = {
         refreshInProgress = true,
         lockOwner = username,
@@ -68,8 +67,15 @@ function LockManager.Acquire(username, timeout)
     }
     writeLock(newLock)
 
-    return true
+    -- 🔁 Bestätigen, dass unser Lock wirklich aktiv ist
+    local confirm = readLock()
+    if confirm.lockOwner == username then
+        return true
+    else
+        return false, "Lockkollision bei Bestätigung"
+    end
 end
+
 
 -- 📤 Gibt den Lock wieder frei
 function LockManager.Release(username)

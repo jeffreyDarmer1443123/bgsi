@@ -68,9 +68,19 @@ task.spawn(function()
 
     -- 🔄 Serverliste aktualisieren
     local function refreshServers()
-        local ok, reason = LockManager.Acquire(username)
-        if not ok then
+        local retries = 0
+        local maxRetries = 5
+        while retries < maxRetries do
+            local ok, reason = LockManager.Acquire(username)
+            if ok then break end
+
             warn(username.." ⏳ Lock aktiv: "..reason)
+            retries += 1
+            task.wait(math.random(2, 4))
+        end
+
+        if retries >= maxRetries then
+            warn(username.." ❗ Konnte Lock nicht bekommen nach "..maxRetries.." Versuchen.")
             return false
         end
 
