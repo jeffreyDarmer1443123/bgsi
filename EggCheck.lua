@@ -6,10 +6,9 @@ local Players = game:GetService("Players")
 -- Sicherstellen, dass shared-Variablen existieren
 local requiredLuck = shared.requiredLuck
 local eggNames = shared.eggNames
-local PrioEgg = shared.PrioEgg
 
 local webhookUrl = shared.webhookUrl
-local username = Players.LocalPlayer and Players.LocalPlayer.Name or "Unbekannt"
+local username = Players.LocalPlayer.Name
 
 if not requiredLuck then
     warn(username .. " ⚠️ Kein Luck in shared.requiredLuck definiert!")
@@ -93,7 +92,7 @@ local function sendWebhookEmbed(eggName, luck, timeText, height, jobId, placeId)
 
     local success, res = safeRequest(requestArgs)
     if not success then
-        warn(username .. " ❌ Webhook fehlgeschlagen: " .. tostring(res or "Keine Antwort"))
+        warn(username .. " ❌ Webhook fehlgeschlagen: " .. tostring(res))
     end
 end
 
@@ -118,27 +117,16 @@ if not rifts then
     return
 end
 
-local MillEgg = rifts:FindFirstChild(PrioEgg)
+local MillEgg = rifts:FindFirstChild("silly-egg")
 if MillEgg then
     local luck, timeText = getEggStats(MillEgg)
+    local yInfo = ""
     local outputPart = MillEgg:FindFirstChild("Output")
-    local height = outputPart and outputPart.Position.Y or 0
-
-    sendWebhookEmbed(
-        MillEgg.Name,
-        luck or 0,
-        timeText or "N/A",
-        height,
-        game.JobId,
-        game.PlaceId
-    )
-
-    shared.foundEgg = true
-    shared.eggCheckFinished = true
-    print((username or "?") .. " 🟣 MillEgg gefunden! Luck: "..tostring(luck or "?")..", Zeit: "..tostring(timeText or "?"))
-    return -- sofort beenden, da MillEgg priorisiert wird
+    if outputPart and outputPart:IsA("BasePart") then
+        yInfo = (" | Y=%.2f"):format(outputPart.Position.Y)
+    end
+    local timeInfo = timeText and (" | Zeit übrig: " .. timeText) or ""
 end
-
 
 
 -- Suche nach passenden Eiern
