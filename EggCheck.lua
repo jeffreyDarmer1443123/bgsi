@@ -126,6 +126,17 @@ if MillEgg then
         yInfo = (" | Y=%.2f"):format(outputPart.Position.Y)
     end
     local timeInfo = timeText and (" | Zeit übrig: " .. timeText) or ""
+    sendWebhookEmbed(
+        MillEgg.Name,
+        luck,
+        timeText,
+        outputPart and outputPart.Position.Y or 0,
+        game.JobId,
+        game.PlaceId
+    )
+    shared.foundEgg = false
+    shared.eggCheckFinished = true
+    print(username .. " ✅" .. MillEgg .. "gefunden und gemeldet!")
 end
 
 
