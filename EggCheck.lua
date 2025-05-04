@@ -117,16 +117,28 @@ if not rifts then
     return
 end
 
-local manEgg = rifts:FindFirstChild("silly-egg")
-if manEgg then
-    local luck, timeText = getEggStats(manEgg)
-    local yInfo = ""
-    local outputPart = manEgg:FindFirstChild("Output")
-    if outputPart and outputPart:IsA("BasePart") then
-        yInfo = (" | Y=%.2f"):format(outputPart.Position.Y)
-    end
-    local timeInfo = timeText and (" | Zeit übrig: " .. timeText) or ""
+local MillEgg = rifts:FindFirstChild("silly-egg")
+if MillEgg then
+    local luck, timeText = getEggStats(MillEgg)
+    local outputPart = MillEgg:FindFirstChild("Output")
+    local height = outputPart and outputPart.Position.Y or 0
+
+    sendWebhookEmbed(
+        MillEgg.Name,
+        luck or 0,
+        timeText or "N/A",
+        height,
+        game.JobId,
+        game.PlaceId
+    )
+
+    shared.foundEgg = true
+    shared.eggCheckFinished = true
+    print(username .. " 🟣 MillEgg gefunden! Luck: "..tostring(luck or "?")..", Zeit: "..tostring(timeText or "?"))
+    return -- sofort beenden, da MillEgg priorisiert wird
 end
+
+
 
 -- Suche nach passenden Eiern
 local candidates = {}
