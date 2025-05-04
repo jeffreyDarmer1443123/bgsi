@@ -1,11 +1,4 @@
 local HttpService = game:GetService("HttpService")
-print("Teste JSONDecode:", typeof(HttpService.JSONDecode))
-local success, result = pcall(function()
-    return HttpService:JSONDecode('{"foo": "bar"}')
-end)
-print("Success:", success, "Result:", result)
-
-
 local TeleportService  = game:GetService("TeleportService")
 local Players          = game:GetService("Players")
 
