@@ -128,7 +128,7 @@ task.spawn(function()
             end)
 
             if ok then
-                task.wait(20)
+                task.wait(3)
                 if game.JobId ~= originalJobId then return end
             end
         end
