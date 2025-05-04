@@ -5,9 +5,10 @@ local TeleportService  = game:GetService("TeleportService")
 local Players          = game:GetService("Players")
 
 -- Konfiguration
-local gameId           = 85896571713843
+local gameId
 local baseUrl          = "https://games.roblox.com/v1/games/"..gameId.."/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100"
 local dataFile         = "server_data.json"
+local gameId = shared.gameId or 85896571713843
 local refreshCooldown  = shared.refreshCooldown or 300        -- 5 Min.
 local maxAttempts      = shared.maxAttempts or 5
 local maxServerIds     = shared.maxServerIds or 200
