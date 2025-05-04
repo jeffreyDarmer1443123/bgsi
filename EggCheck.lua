@@ -9,7 +9,7 @@ local eggNames = shared.eggNames
 local PrioEgg = shared.PrioEgg
 
 local webhookUrl = shared.webhookUrl
-local username = Players.LocalPlayer.Name
+local username = Players.LocalPlayer and Players.LocalPlayer.Name or "Unbekannt"
 
 if not requiredLuck then
     warn(username .. " ⚠️ Kein Luck in shared.requiredLuck definiert!")
@@ -93,7 +93,7 @@ local function sendWebhookEmbed(eggName, luck, timeText, height, jobId, placeId)
 
     local success, res = safeRequest(requestArgs)
     if not success then
-        warn(username .. " ❌ Webhook fehlgeschlagen: " .. tostring(res))
+        warn(username .. " ❌ Webhook fehlgeschlagen: " .. tostring(res or "Keine Antwort"))
     end
 end
 
