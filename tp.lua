@@ -50,6 +50,25 @@ local function saveData(data)
     writefile(dataFile, HttpService:JSONEncode(data))
 end
 
+-- 🚀 Verbesserte Teleport-Funktion (unverändert)
+local function safeTeleportToInstance(gameId, serverId)
+    local maxRetries = maxAttempts
+    for i = 1, maxRetries do
+        local ok, err = pcall(function()
+            TeleportService:TeleportToPlaceInstance(gameId, serverId)
+        end)
+        if ok then return true end
+        
+        -- Exponentielles Backoff mit Jitter
+        local delay = math.pow(baseDelay, i) + math.random()
+        warn(username.." 🔄 Teleport-Versuch "..i.."/"..maxRetries.." - Warte "..string.format("%.1f", delay).."s")
+        task.wait(delay)
+    end
+    return false
+end
+
+
+
 local function tryHopServers(data)
     local startJobId = game.JobId
     local attempts = 0
@@ -207,23 +226,6 @@ local function refreshServerIds()
     
     releaseLock(data)
     return true
-end
-
--- 🚀 Verbesserte Teleport-Funktion (unverändert)
-local function safeTeleportToInstance(gameId, serverId)
-    local maxRetries = maxAttempts
-    for i = 1, maxRetries do
-        local ok, err = pcall(function()
-            TeleportService:TeleportToPlaceInstance(gameId, serverId)
-        end)
-        if ok then return true end
-        
-        -- Exponentielles Backoff mit Jitter
-        local delay = math.pow(baseDelay, i) + math.random()
-        warn(username.." 🔄 Teleport-Versuch "..i.."/"..maxRetries.." - Warte "..string.format("%.1f", delay).."s")
-        task.wait(delay)
-    end
-    return false
 end
 
 -- 🔄 Hauptsteuerung mit Sicherheitschecks
