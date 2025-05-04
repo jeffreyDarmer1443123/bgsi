@@ -1,175 +1,237 @@
--- 🔁 TP.lua (komplett ausführbar über loadstring)
-task.spawn(function()
-    local Players = game:GetService("Players")
-    local HttpService = game:GetService("HttpService")
-    local TeleportService = game:GetService("TeleportService")
+-- tp.lua: JSON-basiertes Server-Hopping mit Synchronisation über refreshInProgress
 
-    local username = Players.LocalPlayer.Name
-    local gameId = 85896571713843
-    local dataFile = "server_data.json"
-    local refreshCooldown = shared.refreshCooldown or 60
-    local maxAttempts = shared.maxAttempts or 25
-    local maxServerIds = shared.maxServerIds or 200
-    local baseDelay = shared.baseDelay or 5
+local HttpService      = game:GetService("HttpService")
+local TeleportService  = game:GetService("TeleportService")
+local Players          = game:GetService("Players")
 
-    local baseUrl = "https://games.roblox.com/v1/games/"..gameId.."/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100"
+-- Konfiguration
+local gameId           = 85896571713843
+local baseUrl          = "https://games.roblox.com/v1/games/"..gameId.."/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100"
+local dataFile         = "server_data.json"
+local refreshCooldown  = shared.refreshCooldown or 300        -- 5 Min.
+local maxAttempts      = shared.maxAttempts or 5
+local maxServerIds     = shared.maxServerIds or 200
+local username = Players.LocalPlayer.Name
 
-    -- 🌐 Hole LockManager inline via loadstring
-    local LockManager = (function()
-        local url = "https://raw.githubusercontent.com/jeffreyDarmer1443123/bgsi/refs/heads/main/LockManager.lua"
-        local code = game:HttpGet(url)
-        return assert(loadstring(code), "LockManager Fehler")()
-    end)()
+-- 🔧 Safe HTTP-Request Utility
+local function safeRequest(opts)
+    local methods = {}
+    if syn and syn.request then table.insert(methods, syn.request) end
+    if fluxus and fluxus.request then table.insert(methods, fluxus.request) end
+    if http and http.request then table.insert(methods, http.request) end
+    if request then table.insert(methods, request) end
+    if http_request then table.insert(methods, http_request) end
 
-    -- 🔄 Speichern / Laden
-    local function loadData()
-        if not isfile(dataFile) then
-            return {serverIds = {}, refreshCooldownUntil = 0}
-        end
-        local success, data = pcall(function()
-            return HttpService:JSONDecode(readfile(dataFile))
-        end)
-        return (success and typeof(data) == "table") and data or {serverIds = {}, refreshCooldownUntil = 0}
-    end
+    table.insert(methods, function(o)
+        return HttpService:RequestAsync({
+            Url     = o.Url,
+            Method  = o.Method,
+            Headers = o.Headers,
+            Body    = o.Body,
+        })
+    end)
 
-    local function saveData(data)
-        writefile(dataFile, HttpService:JSONEncode(data))
-    end
-
-    -- 🌍 Sichere HTTP-Request Methode
-    local function safeRequest(opts)
-        local methods = {request, http_request, syn and syn.request, fluxus and fluxus.request}
-        table.insert(methods, function(o)
-            return HttpService:RequestAsync({
-                Url = o.Url,
-                Method = o.Method,
-                Headers = o.Headers or {},
-                Body = o.Body,
-            })
-        end)
-
-        for _, fn in ipairs(methods) do
-            if fn then
-                local ok, res = pcall(fn, opts)
-                if ok and type(res) == "table" then
-                    local code = res.StatusCode or res.code or 0
-                    if code >= 200 and code < 300 then
-                        return true, {
-                            Body = res.Body or res.response,
-                            StatusCode = code
-                        }
-                    end
-                    return false, "HTTP-"..tostring(code)
-                end
+    for _, fn in ipairs(methods) do
+        local ok, res = pcall(fn, opts)
+        if ok and type(res) == "table" then
+            local code = res.StatusCode or res.code or 0
+            if (res.Success ~= false) and (code >= 200 and code < 300) then
+                return true, res
             end
         end
-        return false, "HTTP fehlgeschlagen"
     end
 
-    -- 🔄 Serverliste aktualisieren
-    local function refreshServers()
-        local retries = 0
-        local maxRetries = 5
-        while retries < maxRetries do
-            local ok, reason = LockManager.Acquire(username)
-            if ok then break end
+    return false, "Kein einziger HTTP-Call hat erfolgreich geantwortet."
+end
 
-            warn(username.." ⏳ Lock aktiv: "..reason)
-            retries += 1
-            task.wait(math.random(2, 4))
-        end
-
-        if retries >= maxRetries then
-            warn(username.." ❗ Konnte Lock nicht bekommen nach "..maxRetries.." Versuchen.")
-            return false
-        end
-
-        warn(username.." 🔒 Lock übernommen – aktualisiere Serverliste...")
-        local data = loadData()
-        local allIds = {}
-        local nextCursor = ""
-
-        repeat
-            local url = baseUrl .. (nextCursor ~= "" and "&cursor="..nextCursor or "")
-            local httpOk, res = safeRequest({Url = url, Method = "GET"})
-            if not httpOk then
-                LockManager.Release(username)
-                error("❌ HTTP fehlgeschlagen: "..res)
-            end
-
-            local parsed = HttpService:JSONDecode(res.Body)
-            nextCursor = parsed.nextPageCursor or ""
-
-            for _, server in ipairs(parsed.data or {}) do
-                if type(server) == "table" and server.id and not server.vipServerId and server.playing < server.maxPlayers then
-                    table.insert(allIds, server.id)
-                end
-            end
-        until nextCursor == "" or #allIds >= maxServerIds
-
-        if #allIds > 0 then
-            data.serverIds = allIds
-            data.refreshCooldownUntil = os.time() + refreshCooldown
-            saveData(data)
-            warn(username.." ✅ Serverliste aktualisiert: "..#allIds.." Server")
-        else
-            warn(username.." ⚠️ Keine Server gefunden.")
-        end
-
-        LockManager.Release(username)
-        return true
+-- 🔄 JSON Speicherfunktionen
+local function loadData()
+    if not isfile(dataFile) then
+        return {
+            serverIds = {},
+            refreshCooldownUntil = 0,
+            refreshInProgress = false
+        }
     end
 
-    -- 🚀 Teleport Logik
-    local function teleportToRandomServer()
-        local data = loadData()
-        local originalJobId = game.JobId
-
-        for attempt = 1, maxAttempts do
-            if #data.serverIds == 0 then break end
-
-            local idx = math.random(1, #data.serverIds)
-            local sid = table.remove(data.serverIds, idx)
-            saveData(data)
-
-            warn(username.." 🚀 Versuch "..attempt..": "..sid)
-            local ok = pcall(function()
-                TeleportService:TeleportToPlaceInstance(gameId, sid)
-            end)
-
-            if ok then
-                task.wait(3)
-                if game.JobId ~= originalJobId then return end
-            end
-        end
-
-        warn(username.." ❗ Alle Versuche fehlgeschlagen.")
+    local content = readfile(dataFile)
+    local success, result = pcall(function()
+        return HttpService:JSONDecode(content)
+    end)
+    if success and type(result) == "table" then
+        return result
     end
 
-    -- 🧠 Hauptlogik
-    local function main()
-        local retry = 0
-        while retry < 3 do
-            local data = loadData()
-            local now = os.time()
+    return {
+        serverIds = {},
+        refreshCooldownUntil = 0,
+        refreshInProgress = false
+    }
+end
 
-            if now < (data.refreshCooldownUntil or 0) and #data.serverIds > 0 then
-                return teleportToRandomServer()
-            end
+local function saveData(data)
+    writefile(dataFile, HttpService:JSONEncode(data))
+end
 
-            local success, err = pcall(refreshServers)
-            if success then
-                return teleportToRandomServer()
+-- 🌐 Retry-fähiges HTTP-Fetch
+local function fetchWithRetry(url)
+    local maxRetries = 5
+    local baseDelay = 5
+    for attempt = 1, maxRetries do
+        local ok, res = safeRequest({ Url = url, Method = "GET", Headers = { ["Content-Type"] = "application/json" } })
+        if ok and res then
+            local code = res.StatusCode or res.code
+            if code == 200 then
+                return res.Body
+            elseif code == 429 then
+                local delay = baseDelay * attempt + math.random()
+                warn(username .. " ❗ Rate-Limit (" .. attempt .. "/" .. maxRetries .. "), warte " .. string.format("%.1f", delay) .. "s")
+                task.wait(delay)
             else
-                warn(username.." ⚠️ Fehler: "..tostring(err))
-                retry += 1
-                task.wait(math.random(2, 5))
+                error(username .. " HTTP-Fehler: " .. code)
             end
+        else
+            local delay = baseDelay * attempt + math.random()
+            warn(username .. " ❗ HTTP-Request fehlgeschlagen (" .. attempt .. "/" .. maxRetries .. "), warte " .. delay .. "s")
+            task.wait(delay)
         end
     end
+    error(username .. " ❗ Zu viele fehlgeschlagene HTTP-Versuche.")
+end
 
-    local success, err = pcall(main)
-    if not success then
-        warn(username.." ❌ TP.lua Hauptfehler:", err)
+
+-- 🔃 Serverliste aktualisieren
+-- 🔃 Angepasste Funktion: Serverliste aktualisieren (mit festem, benutzerbasiertem Offset + Zufallsanteil)
+local function refreshServerIds(data)
+    -- Benutzerbasierter Fix-Offset aus Username
+    local sum = 0
+    for i = 1, #username do
+        sum = sum + username:byte(i)
     end
-end)
+    local baseOffset = sum % 5  -- 0–4 Sekunden, einzigartig pro Account
+    local jitter = baseOffset + math.random() * 2  -- plus 0–2s Zufall
+    warn(username .. " ✨ Refresh-Offset: " .. string.format("%.2f", jitter) .. "s")
+    task.wait(jitter)
+
+    local allIds, url = {}, baseUrl
+    while url and #allIds < maxServerIds do
+        local body = fetchWithRetry(url)
+        if not body then break end
+        local ok, resp = pcall(HttpService.JSONDecode, HttpService, body)
+        if not ok or type(resp) ~= "table" or not resp.data then
+            warn(username .. " ❗ Ungültige Server-Antwort erhalten.")
+            break
+        end
+        for _, srv in ipairs(resp.data) do
+            if not srv.vipServerId then
+                table.insert(allIds, srv.id)
+            end
+        end
+        url = (resp.nextPageCursor and #allIds < maxServerIds)
+              and (baseUrl .. "&cursor=" .. resp.nextPageCursor)
+              or nil
+    end
+
+    if #allIds == 0 then
+        warn(username .. " ❗ Keine öffentlichen Server gefunden.")
+    else
+        data.serverIds = allIds
+        data.refreshCooldownUntil = os.time() + refreshCooldown
+        print(username .. " ✔️ Serverliste aktualisiert: " .. #allIds)
+    end
+
+    data.refreshInProgress = false
+    saveData(data)
+end
+
+
+local function safeTeleportToInstance(gameId, serverId)
+    local maxRetries, baseDelay = 5, 5
+    for i = 1, maxRetries do
+        local ok, err = pcall(function()
+            TeleportService:TeleportToPlaceInstance(gameId, serverId)
+        end)
+        if ok then return true end
+        warn(username .. " ❗ Teleport-Fehler (" .. i .. "/" .. maxRetries .. "): " .. tostring(err))
+        local delay = baseDelay * i + math.random()
+        warn(username .. " ❗ Warte " .. string.format("%.1f", delay) .. "s vor erneutem Versuch…")
+        task.wait(delay)
+    end
+    warn(username .. " ❗ Maximale Teleport-Versuche erreicht.")
+    return false
+end
+
+
+
+-- Server-Hopping mit Zufallsoffset und längeren Pausen bei Fehlschlägen
+local function tryHopServers(data)
+    local startJob, attempts = game.JobId, 0
+    task.wait(math.random() * 3) -- Entzerrung zwischen Instanzen
+    while #data.serverIds > 0 and attempts < maxAttempts do
+        attempts = attempts + 1
+        local idx = math.random(#data.serverIds)
+        local sid = table.remove(data.serverIds, idx)
+        saveData(data)
+        print(username .. " 🚀 Versuch #" .. attempts .. ": Teleport zu " .. sid)
+        if safeTeleportToInstance(gameId, sid) then
+            task.wait(20) -- Wartezeit nach erfolgreichem Teleport
+            if game.JobId ~= startJob then return end
+        else
+            warn(username .. " ❗ Abbruch, warte 30s vor nächstem Versuch.")
+            task.wait(30)
+        end
+    end
+    warn(username .. " ❗ Kein gültiger Server nach " .. maxAttempts .. " Versuchen.")
+end
+
+
+-- 🚀 Hauptfunktion
+local function main()
+    local data = loadData()
+
+    -- 1) Warten, falls bereits ein Refresh läuft
+    if data.refreshInProgress then
+        warn(username .. " ❗ Serveraktualisierung läuft gerade auf anderem Client. Warte…")
+        local waitStart = os.time()
+        repeat
+            task.wait(1)
+            data = loadData()
+            if os.time() - waitStart > 60 then
+                warn(username .. " ❗ Wartezeit überschritten – setze Lock zurück.")
+                data.refreshInProgress = false
+                saveData(data)
+                break
+            end
+        until not data.refreshInProgress
+        print(username .. " ℹ️ Serveraktualisierung abgeschlossen oder Lock zurückgesetzt.")
+    end
+
+    -- 2) Refresh auslösen, wenn nötig
+    if os.time() >= (data.refreshCooldownUntil or 0) or #data.serverIds == 0 then
+        -- 🔒 Lock setzen BEVOR der Refresh startet
+        data.refreshInProgress = true
+        saveData(data)
+        
+        -- 🔄 Refresh mit Fehlerbehandlung
+        local success, err = pcall(refreshServerIds, data)
+        if not success then
+            warn(username .. " ❗ Refresh fehlgeschlagen: " .. tostring(err))
+            data.refreshInProgress = false
+            saveData(data)
+        end
+        
+        -- Daten neu einlesen
+        data = loadData()
+        print(username .. " ℹ️ Serverliste aktualisiert.")
+    end
+
+    -- 3) Server-Hopping starten
+    if #data.serverIds == 0 then
+        warn(username .. " ❗ Keine Server-IDs verfügbar.")
+        return
+    end
+    tryHopServers(data)
+end
+
+-- ▶️ Start
+main()
