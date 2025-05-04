@@ -189,47 +189,55 @@ end
 local function main()
     local data = loadData()
 
-    -- 1) Warten, falls bereits ein Refresh läuft
-    if data.refreshInProgress then
-        warn(username .. " ❗ Serveraktualisierung läuft gerade auf anderem Client. Warte…")
+    -- ⏳ Warten falls Lock aktiv
+    if data.refreshInProgress and data.refreshOwner and data.refreshOwner ~= username then
+        warn(username.." ⏳ Warte auf "..data.refreshOwner.." (aktualisiert Serverliste)")
         local waitStart = os.time()
         repeat
-            task.wait(1)
+            task.wait(2)
             data = loadData()
-            if os.time() - waitStart > 60 then
-                warn(username .. " ❗ Wartezeit überschritten – setze Lock zurück.")
-                data.refreshInProgress = false
-                saveData(data)
-                break
-            end
-        until not data.refreshInProgress
-        print(username .. " ℹ️ Serveraktualisierung abgeschlossen oder Lock zurückgesetzt.")
-    end
+        until not data.refreshInProgress or os.time() - waitStart > 60
 
-    -- 2) Refresh auslösen, wenn nötig
-    if os.time() >= (data.refreshCooldownUntil or 0) or #data.serverIds == 0 then
-        -- 🔒 Lock setzen BEVOR der Refresh startet
-        data.refreshInProgress = true
-        saveData(data)
-        
-        -- 🔄 Refresh mit Fehlerbehandlung
-        local success, err = pcall(refreshServerIds, data)
-        if not success then
-            warn(username .. " ❗ Refresh fehlgeschlagen: " .. tostring(err))
-            data.refreshInProgress = false
-            saveData(data)
+        if data.refreshInProgress then
+            warn(username.." ⚠️ Timeout – Lock nicht aufgehoben, beende.")
+            return
         end
-        
-        -- Daten neu einlesen
-        data = loadData()
-        print(username .. " ℹ️ Serverliste aktualisiert.")
     end
 
-    -- 3) Server-Hopping starten
+    -- 🔄 Falls Refresh nötig
+    if os.time() >= (data.refreshCooldownUntil or 0) or #data.serverIds == 0 then
+        data.refreshInProgress = true
+        data.refreshOwner = username
+        saveData(data)
+
+        local ok, err = pcall(refreshServerIds, data)
+        if not ok then
+            warn(username.." ❗ Refresh-Fehler: "..tostring(err))
+
+            -- Daten reload + Eigentümer check
+            data = loadData()
+            if data.refreshOwner == username then
+                warn(username.." 🔄 Wiederhole Versuch (bin Besitzer des Locks)")
+                data.refreshInProgress = true
+                data.refreshOwner = username
+                saveData(data)
+
+                pcall(refreshServerIds, data)
+                data = loadData()
+            else
+                warn(username.." ⛔ Lock wurde übernommen von "..tostring(data.refreshOwner)..", breche ab.")
+                return
+            end
+        end
+
+        data = loadData()
+    end
+
     if #data.serverIds == 0 then
-        warn(username .. " ❗ Keine Server-IDs verfügbar.")
+        warn(username.." ❗ Keine Serverdaten verfügbar")
         return
     end
+
     tryHopServers(data)
 end
 
