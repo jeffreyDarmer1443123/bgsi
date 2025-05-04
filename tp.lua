@@ -238,7 +238,7 @@ local function main()
         
         if cooldownActive and #data.serverIds > 0 then
             local remaining = data.refreshCooldownUntil - currentTime
-            warn(username.." ⏲️ Cooldown aktiv ("..math.floor(remaining).."s)")
+            --warn(username.." ⏲️ Cooldown aktiv ("..math.floor(remaining).."s)")
             return tryHopServers(data)
         end
 
