@@ -135,7 +135,7 @@ if MillEgg then
 
     shared.foundEgg = true
     shared.eggCheckFinished = true
-    print(username .. " 🟣 MillEgg gefunden! Luck: "..tostring(luck or "?")..", Zeit: "..tostring(timeText or "?"))
+    print((username or "?") .. " 🟣 MillEgg gefunden! Luck: "..tostring(luck or "?")..", Zeit: "..tostring(timeText or "?"))
     return -- sofort beenden, da MillEgg priorisiert wird
 end
 
