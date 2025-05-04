@@ -74,7 +74,7 @@ local function tryHopServers(data)
         local sid = table.remove(data.serverIds, idx)
         saveData(data)
 
-        warn(username.." 🚀 Versuch #"..attempts..": "..sid)
+        print(username.." 🚀 Versuch #"..attempts..": "..sid)
         if safeTeleportToInstance(gameId, sid) then
             task.wait(20) -- Erfolgswartezeit
             if game.JobId ~= startJobId then return end
@@ -220,7 +220,7 @@ local function refreshServerIds()
         data.serverIds = allIds
         data.refreshCooldownUntil = os.time() + refreshCooldown
         saveData(data)
-        warn(username.." ✔️ Aktualisiert ("..#allIds.." Server)")
+        success(username.." ✔️ Aktualisiert ("..#allIds.." Server)")
     else
         warn(username.." ⚠️ Leere Serverliste erhalten")
     end
@@ -331,7 +331,7 @@ local function main()
                 error("Kritischer Fehler: Leere Liste nach Refresh")
             end
             
-            warn(username.." ✅ Erfolgreich aktualisiert ("..#data.serverIds.." Server)")
+            success(username.." ✅ Erfolgreich aktualisiert ("..#data.serverIds.." Server)")
             return tryHopServers(data)
         end
     end
